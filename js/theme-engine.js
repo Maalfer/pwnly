@@ -126,6 +126,16 @@
 
     function resolvePath(path, stack) {
         if (path === '.' || path === 'this') return stack[stack.length - 1];
+        // "this.propiedad": propiedad del contexto ACTUAL directamente, sin
+        // buscar hacia fuera (a diferencia de una ruta pelada tipo "propiedad").
+        if (path.startsWith('this.')) {
+            let val = stack[stack.length - 1];
+            for (const p of path.slice(5).split('.')) {
+                if (val === null || val === undefined) return undefined;
+                val = val[p];
+            }
+            return val;
+        }
         const parts = path.split('.');
         for (let i = stack.length - 1; i >= 0; i--) {
             const scope = stack[i];
