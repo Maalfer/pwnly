@@ -3835,24 +3835,6 @@ button {
     }
 }
 
-/* ==================== REPORT THEME PRINT BACKGROUNDS ==================== */
-/* El fondo del informe en impresión sale de la variable del tema activo
-   (--rt-pageBg), de modo que vale para los 3 temas de fábrica y para cualquier
-   tema personalizado que cree el usuario. */
-@media print {
-    [data-rt-theme] body,
-    [data-rt-theme] .cover-page,
-    [data-rt-theme] .index-page,
-    [data-rt-theme] #summary,
-    [data-rt-theme] #incidents,
-    [data-rt-theme] .main-content,
-    [data-rt-theme] .preview-container,
-    [data-rt-theme] .findings-preview {
-        background: var(--rt-pageBg) !important;
-        color: var(--rt-textBody) !important;
-    }
-}
-
 /* ---- Template Search Dropdown ---- */
 .template-search-container {
     position: relative;
@@ -5710,6 +5692,44 @@ button {
     .theme-studio-body { flex-direction: column; }
     .ts-controls { width: 100%; border-right: none; border-bottom: 1px solid var(--gray-200,#e5e7eb); }
 }
+
+/* ---- Editor de código del tema (HTML/CSS + vista previa en iframe) ---- */
+.ts-controls--code { width: 50%; display: flex; flex-direction: column; }
+.ts-tabs { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; flex-shrink: 0; }
+.ts-tab {
+    padding: 0.4rem 1rem; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px;
+    background: #fff; color: var(--gray-600, #4b5563); font-size: 0.8rem; font-weight: 600;
+    cursor: pointer;
+}
+.ts-tab.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+.ts-code--full { flex: 1; min-height: 0; height: auto; resize: none; }
+.ts-preview--frame { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 1.1rem 1.25rem; }
+.ts-preview-iframe {
+    flex: 1; min-height: 0; width: 100%; border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 8px; background: #fff;
+}
+@media (max-width: 860px) {
+    .ts-controls--code { width: 100%; }
+}
+
+/* ---- Página "Temas": listado ---- */
+.themes-page { max-width: 980px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+.themes-page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+.themes-page-header h1 { margin: 0 0 0.35rem; }
+.themes-page-sub { color: var(--gray-500, #6b7280); font-size: 0.9rem; max-width: 560px; margin: 0; }
+.themes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+.theme-card2 {
+    border: 1px solid var(--gray-200, #e5e7eb); border-radius: 10px; padding: 1.1rem 1.25rem;
+    background: #fff; display: flex; flex-direction: column; gap: 0.75rem;
+}
+.theme-card2.active { border-color: #2563eb; box-shadow: 0 0 0 1px #2563eb; }
+.theme-card2-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.theme-card2-name { font-weight: 700; font-size: 0.95rem; }
+.theme-card2-badge { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #2563eb; background: rgba(37,99,235,0.1); padding: 0.2rem 0.5rem; border-radius: 999px; }
+.theme-card2-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.themes-page-import { margin-top: 2rem; }
+.theme-import-label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.preview-empty { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
 
 /* ============================================================================ */
 /* TEMA RED TEAM — aplicado a TODA la interfaz (no solo al informe).             */

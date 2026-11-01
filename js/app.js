@@ -8,9 +8,10 @@ const state = {
     activeTab: 'editor',
     isLoading: false,
     currentReportId: null,
-    reportTheme: 'light',
+    reportTheme: '',
     savedReports: [],
     showReportSelector: false,
+    showThemesPage: false,
     auditData: {
         documentTitle: 'Reporte Técnico de Vulnerabilidades',
         clientCompany: 'Empresa Cliente S.A.',
@@ -89,7 +90,7 @@ const state = {
     showDemoModal: false,
     showPdfModal: false,
     showRevisionModal: false,
-    pdfPrintTheme: 'light',
+    pdfPrintTheme: '',
     pdfShowSeverityBars: true,
     pdfContentWidth: 820,
     // Autenticación
@@ -728,13 +729,6 @@ function markdownToHtml(str) {
 
 const severityWeights = { crit: 5, high: 4, med: 3, low: 2, info: 1 };
 
-// TLP eliminado por completo del informe: el badge de nivel TLP ya no se
-// renderiza en ninguna cabecera de sección ni en la portada. Se conserva la
-// función (devolviendo cadena vacía) para no tener que tocar cada llamador.
-function renderTlpPageBadge() {
-    return '';
-}
-
 // Normaliza un hallazgo recibido de la API (snake_case) a las claves camelCase
 // que usa el estado local y el render. Conserva las claves originales.
 function normalizeFinding(f) {
@@ -961,6 +955,7 @@ function renderNavbar() {
                 <button class="${state.showReportSelector ? 'active' : ''}" onclick="showReports()">${t.myReports}</button>
                 <button class="${state.activeTab === 'editor' && !state.showReportSelector ? 'active' : ''}" onclick="hideReports(); setTab('editor')">${t.editor}</button>
                 <button class="${state.activeTab === 'preview' && !state.showReportSelector ? 'active' : ''}" onclick="hideReports(); setTab('preview')">${t.preview}</button>
+                <button class="${state.showThemesPage ? 'active' : ''}" onclick="showThemesPage()">${state.lang === 'es' ? 'Temas' : 'Themes'}</button>
                 <div class="export-dropdown" style="position:relative;display:inline-block;">
                     <button class="btn-primary pdf-btn${(state.generatingPdf || state.exportingHtml) ? ' pdf-btn--loading' : ''}" onclick="toggleExportMenu(event)" ${(state.generatingPdf || state.exportingHtml) ? 'disabled' : ''}>
                         ${(state.generatingPdf || state.exportingHtml)
@@ -994,7 +989,7 @@ function renderNavbar() {
 }
 
 function renderEditor() {
-    if (state.activeTab !== 'editor' || state.showSplash || state.showReportSelector) return '';
+    if (state.activeTab !== 'editor' || state.showSplash || state.showReportSelector || state.showThemesPage) return '';
     if (state.showReportSelector) return '';
 
     const t = UI[state.lang];
@@ -1624,274 +1619,488 @@ function renderFindingsList() {
 }
 
 // --------------------------------------------------------------------------- //
-// Sistema de temas del informe basado en variables CSS (--rt-*).
-//
-// Cada tema es una paleta de ~40 variables. Los 3 temas de fábrica (light, dark,
-// htb) se definen aquí y se emiten como bloques CSS [data-rt-theme="x"]. Los temas
-// personalizados del usuario viven en la base de datos (mismas claves) y se
-// inyectan igual. El render del informe NO usa colores calculados en JS: usa
-// var(--rt-*), de modo que el estilo del informe se controla 100% desde CSS.
+// Plantilla de partida que se precarga al crear un tema nuevo desde cero.
+// No es un "tema de fábrica" seleccionable: es sólo contenido de ejemplo,
+// completamente editable/sustituible, pensado para enseñar toda la sintaxis
+// del motor de plantillas (ThemeEngine) y las variables disponibles.
 // --------------------------------------------------------------------------- //
-const THEME_KEYS = [
-    'pageBg', 'cardBg', 'cardBgAlt', 'greenBg', 'orangeBg', 'purpleBg', 'metaBg',
-    'textPrimary', 'textHeading', 'textBody', 'textMuted', 'textFaint', 'textSubtle',
-    'textGray', 'textGrayMed', 'coverAccent', 'accentLine', 'accentBar', 'versionColor',
-    'textRed', 'textOrange', 'textOrangeDark', 'textGreen', 'textGreenDark',
-    'border', 'borderLight', 'borderMeta', 'borderMetaSub', 'borderGreen', 'borderOrange',
-    'borderPurple', 'borderFaint', 'classifBg', 'classifBorder', 'classifText',
-    'pocBg', 'pocBorder', 'pocText', 'pocHeading'
-];
+const DEFAULT_THEME_TEMPLATE_HTML = `<div class="cover">
+  {{#if client_logo}}
+  <div class="cover-logos">
+    {{#each client_logo}}<img src="{{this}}" alt="logo" class="cover-logo">{{/each}}
+  </div>
+  {{/if}}
+  <h1 class="cover-title">{{document_title}}</h1>
+  <p class="cover-target">{{target_asset}}</p>
+  <span class="badge badge-classif">{{classification_label}}</span>
 
-const BUILTIN_THEMES = {
-    light: {
-        pageBg: '#ffffff', cardBg: '#f9fafb', cardBgAlt: '#f8fafc', greenBg: '#f0fdf4',
-        orangeBg: '#fff7ed', purpleBg: '#faf5ff', metaBg: 'linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)',
-        textPrimary: '#0f172a', textHeading: '#111827', textBody: '#1f2937', textMuted: '#374151',
-        textFaint: '#4b5563', textSubtle: '#475569', textGray: '#6b7280', textGrayMed: '#64748b',
-        coverAccent: '#475569', accentLine: '#2563eb', accentBar: 'linear-gradient(90deg,#2563eb,#6366f1)',
-        versionColor: '#2563eb', textRed: '#dc2626', textOrange: '#c2410c', textOrangeDark: '#9a3412',
-        textGreen: '#166534', textGreenDark: '#15803d', border: '#e5e7eb', borderLight: '#d1d5db',
-        borderMeta: '#e2e8f0', borderMetaSub: '#cbd5e1', borderGreen: '#bbf7d0', borderOrange: '#fed7aa',
-        borderPurple: '#e9d5ff', borderFaint: '#f3f4f6', classifBg: '#f1f5f9', classifBorder: '#cbd5e1',
-        classifText: '#475569', pocBg: '#1e293b', pocBorder: '#334155', pocText: '#e2e8f0', pocHeading: '#93c5fd'
-    },
-    dark: {
-        pageBg: '#0f172a', cardBg: '#1e293b', cardBgAlt: '#1e293b', greenBg: '#052e16',
-        orangeBg: '#431407', purpleBg: '#2e1065', metaBg: 'linear-gradient(135deg,#1e293b 0%,#0f172a 100%)',
-        textPrimary: '#f8fafc', textHeading: '#f1f5f9', textBody: '#e2e8f0', textMuted: '#cbd5e1',
-        textFaint: '#94a3b8', textSubtle: '#94a3b8', textGray: '#94a3b8', textGrayMed: '#94a3b8',
-        coverAccent: '#94a3b8', accentLine: '#2563eb', accentBar: 'linear-gradient(90deg,#2563eb,#6366f1)',
-        versionColor: '#9fef00', textRed: '#f87171', textOrange: '#fb923c', textOrangeDark: '#fdba74',
-        textGreen: '#86efac', textGreenDark: '#86efac', border: '#334155', borderLight: '#334155',
-        borderMeta: '#334155', borderMetaSub: '#475569', borderGreen: '#166534', borderOrange: '#9a3412',
-        borderPurple: '#6b21a8', borderFaint: '#334155', classifBg: '#1e293b', classifBorder: '#475569',
-        classifText: '#94a3b8', pocBg: '#060a0f', pocBorder: '#1e293b', pocText: '#e2e8f0', pocHeading: '#93c5fd'
-    },
-    htb: {
-        pageBg: '#1a2332', cardBg: '#0d1117', cardBgAlt: '#0d1117', greenBg: '#0a1f0d',
-        orangeBg: '#1f1005', purpleBg: '#140d1f', metaBg: '#0d1117',
-        textPrimary: '#ffffff', textHeading: '#9fef00', textBody: '#e2e8f0', textMuted: '#cbd5e1',
-        textFaint: '#a0aec0', textSubtle: '#a0aec0', textGray: '#64748b', textGrayMed: '#9fef00',
-        coverAccent: '#9fef00', accentLine: '#9fef00', accentBar: '#9fef00',
-        versionColor: '#9fef00', textRed: '#ff6b6b', textOrange: '#fb923c', textOrangeDark: '#fcd34d',
-        textGreen: '#9fef00', textGreenDark: '#d9f99d', border: '#2d3f55', borderLight: '#2d3f55',
-        borderMeta: '#2d3f55', borderMetaSub: '#2d3f55', borderGreen: '#9fef00', borderOrange: '#c2410c',
-        borderPurple: '#a78bfa', borderFaint: '#2d3f55', classifBg: '#0d1117', classifBorder: '#9fef00',
-        classifText: '#9fef00', pocBg: '#060b10', pocBorder: '#1a2332', pocText: '#e2e8f0', pocHeading: '#9fef00'
-    },
-    redteam: {
-        pageBg: '#0c0a0b', cardBg: '#141011', cardBgAlt: '#141011', greenBg: '#0a1f0d',
-        orangeBg: '#231304', purpleBg: '#1a0d16', metaBg: 'linear-gradient(135deg,#15100f 0%,#0c0a0b 100%)',
-        textPrimary: '#fafafa', textHeading: '#f87171', textBody: '#e6e1e1', textMuted: '#c4babb',
-        textFaint: '#9e9293', textSubtle: '#9e9293', textGray: '#7d7173', textGrayMed: '#f87171',
-        coverAccent: '#d4a0a3', accentLine: '#ef4444', accentBar: 'linear-gradient(90deg,#f43f5e,#b91c1c)',
-        versionColor: '#fb7185', textRed: '#fca5a5', textOrange: '#fb923c', textOrangeDark: '#fdba74',
-        textGreen: '#86efac', textGreenDark: '#86efac', border: '#271b1d', borderLight: '#271b1d',
-        borderMeta: '#271b1d', borderMetaSub: '#3a282b', borderGreen: '#166534', borderOrange: '#9a3412',
-        borderPurple: '#6b21a8', borderFaint: '#1e1517', classifBg: '#141011', classifBorder: '#7f1d1d',
-        classifText: '#fca5a5', pocBg: '#080607', pocBorder: '#271b1d', pocText: '#e6e1e1', pocHeading: '#fb7185'
-    }
-};
+  <div class="cover-meta">
+    <div><span class="cover-meta-label">Cliente</span><strong>{{client_company}}</strong></div>
+    <div><span class="cover-meta-label">Auditor</span><strong>{{auditor_company}}</strong><br>{{auditor_name}}</div>
+    <div><span class="cover-meta-label">Fecha</span><strong>{{date}}</strong></div>
+    <div><span class="cover-meta-label">Versión</span><strong>{{version}}</strong></div>
+  </div>
+</div>
 
-const BUILTIN_THEME_META = [
-    { slug: 'light',   name: 'Claro',    nameEn: 'Light' },
-    { slug: 'dark',    name: 'Oscuro',   nameEn: 'Dark' },
-    { slug: 'htb',     name: 'HTB',      nameEn: 'HTB' },
-    { slug: 'redteam', name: 'Red Team', nameEn: 'Red Team' }
-];
+<div class="toc">
+  <h2>Índice</h2>
+  <a class="toc-item" href="#resumen"><span>Resumen ejecutivo</span></a>
+  {{#if scope.show}}<a class="toc-item" href="#alcance"><span>Alcance y metodología</span></a>{{/if}}
+  <a class="toc-item" href="#hallazgos"><span>Hallazgos técnicos</span></a>
+  {{#each findings}}
+  <a class="toc-item toc-finding" href="#finding-{{this.index}}">
+    <span>{{this.index1}}. {{this.title}}</span>
+    <span class="badge sev-{{this.severity}}">{{this.severity_label}}</span>
+  </a>
+  {{/each}}
+</div>
 
-// Mapa estático key -> var(--rt-key). El informe sólo usa estas referencias CSS,
-// así que el tema activo se decide por el atributo data-rt-theme del contenedor.
-const RT_VAR_MAP = (() => {
-    const m = {};
-    THEME_KEYS.forEach(k => { m[k] = `var(--rt-${k})`; });
-    return m;
-})();
+<div id="resumen" class="section">
+  <h2 class="section-title">Resumen ejecutivo</h2>
 
-function cssVarName(key) { return '--rt-' + key; }
+  {{#if show_severity_bars}}
+  <div class="summary-bar">
+    {{#each severity_breakdown}}
+    {{#if this.count}}<div class="summary-bar-seg sev-bg-{{this.key}}" style="width:{{this.percent}}%" title="{{this.label}}: {{this.count}}"></div>{{/if}}
+    {{/each}}
+  </div>
+  {{/if}}
 
-// Devuelve el mapa de referencias var() (idéntico para cualquier tema: lo que
-// cambia son los valores resueltos por CSS según data-rt-theme).
-function getThemeColors() { return RT_VAR_MAP; }
-function getThemeColorsFor() { return RT_VAR_MAP; }
+  <div class="summary-legend">
+    {{#each severity_breakdown}}
+    <div class="legend-item"><span class="legend-dot sev-bg-{{this.key}}"></span>{{this.label}} <strong>{{this.count}}</strong></div>
+    {{/each}}
+  </div>
 
-// Devuelve la paleta completa (valores reales) de un tema concreto, fusionando
-// la base con las variables del tema personalizado si lo hubiera.
-function resolveThemePalette(slug) {
-    if (BUILTIN_THEMES[slug]) return { ...BUILTIN_THEMES[slug] };
-    const custom = (state.customThemes || []).find(t => t.slug === slug);
-    if (custom) {
-        const base = BUILTIN_THEMES[custom.base] || BUILTIN_THEMES.light;
-        const merged = { ...base };
-        Object.entries(custom.vars || {}).forEach(([k, v]) => {
-            const key = k.startsWith('--rt-') ? k.slice(5) : k;
-            if (THEME_KEYS.includes(key)) merged[key] = v;
-        });
-        return merged;
-    }
-    return { ...BUILTIN_THEMES.light };
+  {{#if audit_summary}}<div class="rich-text">{{{audit_summary_html}}}</div>{{/if}}
+
+  {{#if risk_matrix_has_data}}
+  <h3>Matriz de riesgo (Probabilidad × Impacto)</h3>
+  <table class="risk-matrix">
+    <tr><th></th><th>Imp. Alta</th><th>Imp. Media</th><th>Imp. Baja</th></tr>
+    {{#each risk_matrix_rows}}
+    <tr>
+      <th>Prob. {{this.likelihood_label}}</th>
+      {{#each this.cells}}<td class="risk-cell risk-{{this.level}}">{{this.count}}</td>{{/each}}
+    </tr>
+    {{/each}}
+  </table>
+  {{/if}}
+
+  <h3>Incidencias detectadas durante las pruebas</h3>
+  {{#if has_incidents}}
+  <div class="callout callout-warning">{{{incidents_html}}}</div>
+  {{else}}
+  <div class="callout callout-ok">No se registraron incidencias durante la ejecución de las pruebas.</div>
+  {{/if}}
+</div>
+
+{{#if scope.show}}
+<div id="alcance" class="section">
+  <h2 class="section-title">Alcance y metodología</h2>
+  {{#if scope.show_dates}}<p><strong>Ventana del engagement:</strong> {{scope.engagement_start}} &rarr; {{scope.engagement_end}}</p>{{/if}}
+  {{#if scope.show_scope_in}}<h3>Dentro del alcance</h3><pre class="mono-block">{{scope.scope_in}}</pre>{{/if}}
+  {{#if scope.show_scope_out}}<h3>Fuera del alcance</h3><pre class="mono-block">{{scope.scope_out}}</pre>{{/if}}
+  {{#if scope.show_standards}}
+  <h3>Metodologías y estándares</h3>
+  <div class="tags">{{#each scope.standards}}<span class="tag">{{this.label}}</span>{{/each}}</div>
+  {{/if}}
+  {{#if scope.show_notes}}<h3>Notas de metodología</h3><div class="rich-text">{{{scope.methodology_notes_html}}}</div>{{/if}}
+  {{#if scope.show_tools}}<h3>Herramientas utilizadas</h3><pre class="mono-block">{{scope.tools_used}}</pre>{{/if}}
+</div>
+{{/if}}
+
+<div id="hallazgos" class="section">
+  <h2 class="section-title">Hallazgos técnicos</h2>
+
+  {{#each findings}}
+  <div id="finding-{{this.index}}" class="finding sev-border-{{this.severity}}">
+    <div class="finding-head">
+      <div>
+        <span class="finding-code">{{this.code}}</span>
+        <h3>{{this.index1}}. {{this.title}}</h3>
+      </div>
+      <span class="badge sev-bg-{{this.severity}}">{{this.severity_label}}</span>
+    </div>
+
+    <div class="finding-meta-grid">
+      <div class="finding-meta-item"><span>CVSS</span><strong>{{this.cvss}}</strong></div>
+      <div class="finding-meta-item"><span>CVE</span><strong>{{this.cve}}</strong></div>
+      <div class="finding-meta-item"><span>CWE</span><strong>{{this.cwe}}</strong></div>
+      <div class="finding-meta-item"><span>Estado</span><strong>{{this.status_label}}</strong></div>
+    </div>
+
+    {{#if this.owasp_visible}}{{#if this.owasp}}<p><strong>OWASP:</strong> {{this.owasp}}</p>{{/if}}{{/if}}
+    {{#if this.risk_visible}}<p><strong>Probabilidad × Impacto:</strong> {{this.likelihood_label}} × {{this.impact_rating_label}}</p>{{/if}}
+    {{#if this.cvss_vector}}<p class="mono-inline">{{this.cvss_vector}}</p>{{/if}}
+    {{#if this.affected_assets}}<p><strong>Activos afectados:</strong></p><pre class="mono-block">{{this.affected_assets}}</pre>{{/if}}
+
+    {{#if this.description}}<h4>Descripción</h4><div class="rich-text">{{{this.description_html}}}</div>{{/if}}
+    {{#if this.poc}}<h4>Pasos de reproducción (PoC)</h4><div class="code-block">{{{this.poc_html}}}</div>{{/if}}
+    {{#if this.exploit}}<h4>Código / exploit</h4><pre class="mono-block">{{this.exploit}}</pre>{{/if}}
+
+    {{#if this.images}}
+    <h4>Evidencias</h4>
+    <div class="evidence-grid">
+      {{#each this.images}}
+      <figure class="evidence">
+        <img src="{{this}}" alt="evidencia {{@index1}}">
+      </figure>
+      {{/each}}
+    </div>
+    {{/if}}
+
+    {{#if this.impact}}<h4>Impacto</h4><div class="rich-text">{{{this.impact_html}}}</div>{{/if}}
+    {{#if this.remediation}}<div class="callout callout-ok"><h4>Solución recomendada</h4><div class="rich-text">{{{this.remediation_html}}}</div></div>{{/if}}
+
+    {{#if this.compliance_visible}}{{#if this.compliance}}
+    <div class="tags">{{#each this.compliance}}<span class="tag">{{this}}</span>{{/each}}</div>
+    {{/if}}{{/if}}
+
+    {{#if this.references}}
+    <h4>Referencias</h4>
+    <ul>{{#each this.references}}<li><a href="{{this}}" target="_blank">{{this}}</a></li>{{/each}}</ul>
+    {{/if}}
+
+    {{#if this.retest_visible}}{{#if this.retest_notes}}
+    <div class="callout"><h4>Notas de re-test</h4><div class="rich-text">{{{this.retest_notes_html}}}</div></div>
+    {{/if}}{{/if}}
+  </div>
+  {{/each}}
+</div>
+
+{{#if revision_history}}
+<div class="section">
+  <h2 class="section-title">Control de versiones</h2>
+  <table class="revisions">
+    <tr><th>Versión</th><th>Fecha</th><th>Autor</th><th>Cambios</th></tr>
+    {{#each revision_history}}
+    <tr><td>{{this.version}}</td><td>{{this.date}}</td><td>{{this.author}}</td><td>{{{this.changes_html}}}</td></tr>
+    {{/each}}
+  </table>
+</div>
+{{/if}}
+`;
+
+const DEFAULT_THEME_TEMPLATE_CSS = `/* Tema de ejemplo de Pwnly — edítalo libremente, es tuyo. */
+body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1f2937; background: #fff; line-height: 1.6; margin: 0; }
+h1, h2, h3, h4 { font-weight: 800; color: #111827; }
+a { color: #2563eb; }
+
+.cover { min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1rem; padding: 3rem 2rem; page-break-after: always; }
+.cover-logos { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.cover-logo { max-height: 90px; }
+.cover-title { font-size: 2.6rem; margin: 0; max-width: 760px; }
+.cover-target { font-size: 1.2rem; color: #2563eb; font-weight: 600; margin: 0; }
+.cover-meta { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem 2rem; }
+.cover-meta-label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 0.2rem; }
+
+.badge { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #fff; }
+.badge-classif { background: #475569; }
+.sev-bg-crit { background: #dc2626; } .sev-bg-high { background: #f97316; } .sev-bg-med { background: #eab308; }
+.sev-bg-low  { background: #22c55e; } .sev-bg-info { background: #6b7280; }
+.sev-border-crit { border-left: 6px solid #dc2626; } .sev-border-high { border-left: 6px solid #f97316; }
+.sev-border-med  { border-left: 6px solid #eab308; } .sev-border-low  { border-left: 6px solid #22c55e; }
+.sev-border-info { border-left: 6px solid #6b7280; }
+
+.toc { max-width: 820px; margin: 0 auto 3rem; padding: 0 1.5rem; page-break-after: always; }
+.toc-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.65rem 0; border-bottom: 1px dotted #d1d5db; text-decoration: none; color: #1f2937; }
+
+.section { max-width: 900px; margin: 0 auto 3rem; padding: 0 1.5rem; }
+.section-title { border-bottom: 2px solid #e5e7eb; padding-bottom: 0.6rem; }
+
+.summary-bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 1rem 0; background: #f1f5f9; }
+.summary-bar-seg { height: 100%; }
+.summary-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.875rem; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+.rich-text { line-height: 1.75; }
+.callout { border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid #e2e8f0; background: #f8fafc; margin: 1rem 0; }
+.callout-ok { background: #f0fdf4; border-color: #bbf7d0; }
+.callout-warning { background: #fff7ed; border-color: #fed7aa; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tag { background: rgba(37,99,235,0.1); color: #1d4ed8; border-radius: 999px; padding: 0.2rem 0.7rem; font-size: 0.78rem; font-weight: 600; }
+
+.mono-block { font-family: ui-monospace, monospace; font-size: 0.85rem; white-space: pre-wrap; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 1rem; }
+.mono-inline { font-family: ui-monospace, monospace; font-size: 0.85rem; color: #475569; }
+.code-block { font-family: ui-monospace, monospace; font-size: 0.85rem; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 1rem; overflow-x: auto; }
+
+.risk-matrix { border-collapse: collapse; margin: 1rem 0; }
+.risk-matrix th, .risk-matrix td { border: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: center; font-size: 0.85rem; }
+
+.finding { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.75rem; margin-bottom: 2rem; page-break-inside: avoid; }
+.finding-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1.25rem; }
+.finding-head h3 { margin: 0.2rem 0 0; }
+.finding-code { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; color: #6b7280; border: 1px solid #e5e7eb; border-radius: 5px; padding: 0.1rem 0.45rem; }
+.finding-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+.finding-meta-item { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem 1rem; }
+.finding-meta-item span { display: block; font-size: 0.7rem; text-transform: uppercase; color: #6b7280; margin-bottom: 0.2rem; }
+
+.evidence-grid { display: grid; gap: 1rem; }
+.evidence img { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; }
+
+.revisions { width: 100%; border-collapse: collapse; }
+.revisions th, .revisions td { border: 1px solid #e5e7eb; padding: 0.6rem 0.8rem; text-align: left; font-size: 0.875rem; }
+
+@media print {
+  .finding { page-break-inside: avoid; }
 }
+`;
 
-// Tema base (light/dark/htb) del que hereda un slug, para decidir el aspecto de
-// la propia interfaz (data-theme) cuando se usa un tema personalizado.
-function themeBaseOf(slug) {
-    if (BUILTIN_THEMES[slug]) return slug;
-    const custom = (state.customThemes || []).find(t => t.slug === slug);
-    return (custom && BUILTIN_THEMES[custom.base]) ? custom.base : 'light';
-}
+// --------------------------------------------------------------------------- //
+// Sistema de Temas: cada tema es una plantilla HTML + una hoja de CSS creadas
+// íntegramente por el usuario (ver js/theme-engine.js para la sintaxis
+// {{variable}} / {{#each}} / {{#if}}). No hay temas de fábrica: el informe no
+// se puede generar hasta que exista al menos un tema. Los datos del reporte se
+// exponen al motor de plantillas vía buildReportContext().
+// --------------------------------------------------------------------------- //
 
-function listAllThemes() {
-    const builtins = BUILTIN_THEME_META.map(m => ({
-        slug: m.slug,
-        name: state.lang === 'es' ? m.name : m.nameEn,
-        base: m.slug,
-        builtin: true
-    }));
-    const customs = (state.customThemes || []).map(t => ({
-        id: t.id, slug: t.slug, name: t.name, base: t.base, vars: t.vars, custom_css: t.custom_css || '', builtin: false
-    }));
-    return [...builtins, ...customs];
-}
-
-// Construye/actualiza el <style> con un bloque [data-rt-theme="x"] por tema.
-function injectThemeStyles() {
-    let css = '';
-    const emit = (slug, palette) => {
-        const decls = THEME_KEYS.map(k => `${cssVarName(k)}:${palette[k] || ''}`).join(';');
-        css += `[data-rt-theme="${slug}"]{${decls}}\n`;
-    };
-    Object.keys(BUILTIN_THEMES).forEach(slug => emit(slug, BUILTIN_THEMES[slug]));
-    (state.customThemes || []).forEach(t => {
-        emit(t.slug, resolveThemePalette(t.slug));
-        // CSS libre del usuario (control total): se acota a ESTE tema mediante
-        // anidamiento CSS, de modo que sus reglas solo afectan a su informe.
-        if (t.custom_css) css += `\n[data-rt-theme="${t.slug}"]{\n${t.custom_css}\n}\n`;
-    });
-
-    let styleEl = document.getElementById('rt-theme-styles');
-    if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = 'rt-theme-styles';
-        document.head.appendChild(styleEl);
-    }
-    styleEl.textContent = css;
+function uniqueThemeSlug(name) {
+    let base = (name || 'tema').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    if (!base) base = 'tema';
+    base = base.slice(0, 40);
+    const existing = new Set((state.customThemes || []).map(t => t.slug));
+    if (!existing.has(base)) return base;
+    let i = 2;
+    while (existing.has(`${base}-${i}`)) i++;
+    return `${base}-${i}`;
 }
 
 async function loadCustomThemes() {
     try {
-        const themes = await API.themes.list();
-        state.customThemes = Array.isArray(themes) ? themes : [];
+        state.customThemes = await API.themes.list();
     } catch (e) {
-        state.customThemes = [];
+        state.customThemes = state.customThemes || [];
     }
+}
+
+function listAllThemes() {
+    return (state.customThemes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getActiveTheme() {
+    return (state.customThemes || []).find(t => t.slug === state.reportTheme) || null;
+}
+
+// Inyecta SOLO el CSS del tema activo (no todos a la vez: cada tema es CSS
+// libre sin espacio de nombres, así que inyectar varios a la vez colisionaría).
+function injectThemeStyles() {
+    let style = document.getElementById('rt-theme-styles');
+    if (!style) {
+        style = document.createElement('style');
+        style.id = 'rt-theme-styles';
+        document.head.appendChild(style);
+    }
+    const theme = getActiveTheme();
+    style.textContent = theme ? (theme.custom_css || '') : '';
+}
+
+function applyThemeAttributes(slug) {
+    document.documentElement.setAttribute('data-rt-theme', slug || '');
     injectThemeStyles();
 }
 
-function slugify(str) {
-    return (str || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+function setReportTheme(slug) {
+    if (!listAllThemes().some(t => t.slug === slug)) return;
+    state.reportTheme = slug;
+    applyThemeAttributes(slug);
+    try { localStorage.setItem('pwnly_theme', slug); } catch (e) { /* almacenamiento no disponible */ }
+    persistSettings();
+    renderApp();
 }
 
-function uniqueThemeSlug(name) {
-    let base = 'c-' + (slugify(name) || 'tema');
-    base = base.slice(0, 40);
-    const taken = new Set(listAllThemes().map(t => t.slug));
-    if (!taken.has(base)) return base;
-    let i = 2;
-    while (taken.has(`${base}-${i}`) && i < 999) i++;
-    return `${base}-${i}`;
+// --------------------------------------------------------------------------- //
+// Página "Temas": listado + gestión. Vive como pestaña propia de la navbar,
+// independiente del editor/preview del reporte.
+// --------------------------------------------------------------------------- //
+function showThemesPage() {
+    state.showThemesPage = true;
+    state.showReportSelector = false;
+    renderApp();
+    loadCustomThemes().then(renderApp);
 }
 
-// Serializa las variables del tema a CSS legible (una declaración por línea).
-function serializeThemeVars(vars) {
-    return THEME_KEYS.map(k => `${cssVarName(k)}: ${vars[k] || ''};`).join('\n');
+function renderThemesPage() {
+    if (!state.showThemesPage || state.showSplash) return '';
+    const isEs = state.lang === 'es';
+    const themes = listAllThemes();
+
+    return `
+        <div class="themes-page">
+            <div class="themes-page-header">
+                <div>
+                    <h1>${isEs ? 'Temas' : 'Themes'}</h1>
+                    <p class="themes-page-sub">${isEs
+                        ? 'Crea tus propios temas de informe: HTML y CSS 100% tuyos, sin plantillas impuestas.'
+                        : 'Build your own report themes: 100% your own HTML and CSS, no imposed templates.'}</p>
+                </div>
+                <button class="btn-primary" onclick="openThemeEditor(null)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    ${isEs ? 'Nuevo tema' : 'New theme'}
+                </button>
+            </div>
+
+            ${themes.length === 0 ? `
+                <div class="empty-state">
+                    <p>${isEs ? 'Todavía no has creado ningún tema.' : "You haven't created any theme yet."}</p>
+                    <p class="text-muted">${isEs ? 'Crea el primero para poder generar el informe (PDF/HTML).' : 'Create the first one to be able to generate the report (PDF/HTML).'}</p>
+                </div>
+            ` : `
+                <div class="themes-grid">
+                    ${themes.map(th => {
+                        const active = state.reportTheme === th.slug;
+                        return `
+                        <div class="theme-card2 ${active ? 'active' : ''}">
+                            <div class="theme-card2-head">
+                                <span class="theme-card2-name">${escapeHTML(th.name)}</span>
+                                ${active ? `<span class="theme-card2-badge">${isEs ? 'Activo' : 'Active'}</span>` : ''}
+                            </div>
+                            <div class="theme-card2-actions">
+                                ${!active ? `<button class="btn-sm btn-secondary" onclick="setReportTheme('${th.slug}')">${isEs ? 'Usar' : 'Use'}</button>` : ''}
+                                <button class="btn-sm btn-secondary" onclick="openThemeEditor('${th.slug}')">${isEs ? 'Editar' : 'Edit'}</button>
+                                <button class="btn-sm btn-secondary" onclick="exportTheme('${th.slug}')">${isEs ? 'Exportar' : 'Export'}</button>
+                                <button class="btn-sm btn-danger" onclick="deleteCustomTheme(${th.id}, '${th.slug}')">${isEs ? 'Eliminar' : 'Delete'}</button>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            `}
+
+            <div class="themes-page-import">
+                <label class="btn-secondary theme-import-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    ${isEs ? 'Importar tema (.html)' : 'Import theme (.html)'}
+                    <input type="file" accept=".html,.htm,text/html" style="display:none" onchange="importThemeFile(this)">
+                </label>
+            </div>
+        </div>
+    `;
 }
 
-// Parsea texto CSS "--rt-key: value;" en un mapa de variables conocidas.
-function parseThemeVars(text) {
-    const out = {};
-    (text || '').split(/[;\n]/).forEach(line => {
-        const m = line.match(/^\s*(--rt-[a-zA-Z0-9-]+)\s*:\s*(.+?)\s*$/);
-        if (m) {
-            const key = m[1].slice(5);
-            if (THEME_KEYS.includes(key)) out[key] = m[2].trim();
-        }
-    });
-    return out;
-}
-
-// --- Gestor de temas (crear / editar / aplicar / exportar / importar) ---
+// --------------------------------------------------------------------------- //
+// Editor de tema a página completa: dos áreas de código (HTML / CSS) + vista
+// previa en vivo (iframe aislado) contra el reporte actual o datos de ejemplo.
+// --------------------------------------------------------------------------- //
 function openThemeEditor(slug) {
-    // slug null => crear nuevo (a partir de 'light'); slug existente => editar.
-    let editing = null;
-    if (slug) editing = (state.customThemes || []).find(t => t.slug === slug) || null;
-    const baseSlug = editing ? editing.base : 'light';
-    const palette = editing ? resolveThemePalette(editing.slug) : { ...BUILTIN_THEMES.light };
-    state.themeEditor = {
-        id: editing ? editing.id : null,
-        slug: editing ? editing.slug : null,
-        name: editing ? editing.name : '',
-        base: baseSlug,
-        vars: { ...palette },
-        customCss: editing ? (editing.custom_css || '') : '',
-        isNew: !editing
+    const existing = slug ? (state.customThemes || []).find(t => t.slug === slug) : null;
+    state.themeEditor = existing ? {
+        slug: existing.slug,
+        name: existing.name,
+        html: existing.html_template || '',
+        css: existing.custom_css || '',
+        isNew: false
+    } : {
+        slug: null,
+        name: '',
+        html: DEFAULT_THEME_TEMPLATE_HTML,
+        css: DEFAULT_THEME_TEMPLATE_CSS,
+        isNew: true
     };
-    state.themeManagerError = '';
-    state.showSettings = false;     // cerramos el modal de ajustes al abrir el estudio
+    state.themeEditorTab = 'html';
     state.isThemeStudio = true;
     renderApp();
+    refreshThemeEditorPreview();
 }
 
 function closeThemeEditor() {
-    state.themeEditor = null;
     state.isThemeStudio = false;
-    const live = document.getElementById('rt-editor-live');
-    if (live) live.remove();
+    state.themeEditor = null;
     renderApp();
 }
 
-function themeEditorSetBase(base) {
-    if (!state.themeEditor) return;
-    state.themeEditor.base = base;
-    // Al cambiar la base partimos de su paleta (conservando el nombre y el CSS libre).
-    state.themeEditor.vars = { ...(BUILTIN_THEMES[base] || BUILTIN_THEMES.light) };
-    renderApp();
-}
-
-function themeEditorSetVar(key, value) {
-    if (!state.themeEditor) return;
-    state.themeEditor.vars[key] = value;
-    refreshThemeEditorPreview();
-}
-
-// Edición directa de las variables como código CSS.
-function themeEditorSetVarsCode(text) {
-    if (!state.themeEditor) return;
-    const parsed = parseThemeVars(text);
-    // Partimos de la base para que las claves no escritas tengan valor.
-    state.themeEditor.vars = { ...(BUILTIN_THEMES[state.themeEditor.base] || BUILTIN_THEMES.light), ...parsed };
-    refreshThemeEditorPreview();
-}
-
-function themeEditorSetCustomCss(text) {
-    if (!state.themeEditor) return;
-    state.themeEditor.customCss = text;
-    refreshThemeEditorPreview();
-}
-
-// Refresca el panel de vista previa del editor sin re-render completo (fluidez).
-function refreshThemeEditorPreview() {
-    const prev = document.getElementById('theme-editor-preview');
-    if (prev) prev.outerHTML = renderThemeEditorPreview();
-    // Inyecta CSS libre del editor en vivo para que también se vea su efecto.
-    let live = document.getElementById('rt-editor-live');
-    if (!live) {
-        live = document.createElement('style');
-        live.id = 'rt-editor-live';
-        document.head.appendChild(live);
-    }
+function renderThemeStudio() {
     const ed = state.themeEditor;
-    live.textContent = (ed && ed.customCss) ? `[data-rt-theme="${ed.slug || '__rtedit'}"]{\n${ed.customCss}\n}` : '';
+    if (!ed) return '';
+    const isEs = state.lang === 'es';
+    const tab = state.themeEditorTab || 'html';
+
+    return `
+        <div class="theme-studio">
+            <div class="theme-studio-header">
+                <div class="ts-head-left">
+                    <button class="account-back-btn" onclick="closeThemeEditor()">&larr; ${isEs ? 'Temas' : 'Themes'}</button>
+                    <h1>${ed.isNew ? (isEs ? 'Nuevo tema' : 'New theme') : (isEs ? 'Editar tema' : 'Edit theme')}</h1>
+                    <input type="text" class="ts-text" style="width:220px;" placeholder="${isEs ? 'Nombre del tema' : 'Theme name'}"
+                        value="${escapeHTML(ed.name)}" oninput="themeEditorSetName(this.value)">
+                </div>
+                <div class="ts-head-actions">
+                    <button class="btn-sm btn-secondary" onclick="closeThemeEditor()">${isEs ? 'Cancelar' : 'Cancel'}</button>
+                    <button class="btn-sm btn-primary" onclick="saveThemeFromEditor()">${isEs ? 'Guardar' : 'Save'}</button>
+                </div>
+            </div>
+            <div class="theme-studio-body">
+                <div class="ts-controls ts-controls--code">
+                    <div class="ts-tabs">
+                        <button class="ts-tab ${tab === 'html' ? 'active' : ''}" onclick="themeEditorSetTab('html')">HTML</button>
+                        <button class="ts-tab ${tab === 'css' ? 'active' : ''}" onclick="themeEditorSetTab('css')">CSS</button>
+                    </div>
+                    ${tab === 'html' ? `
+                        <textarea class="ts-code ts-code--full" spellcheck="false"
+                            oninput="themeEditorSetHtml(this.value)">${escapeHTML(ed.html)}</textarea>
+                        <p class="ts-hint">${isEs
+                            ? 'Plantilla del documento. Sintaxis: <code>{{variable}}</code>, <code>{{{html_sin_escapar}}}</code>, <code>{{#each lista}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'
+                            : 'Document template. Syntax: <code>{{variable}}</code>, <code>{{{unescaped_html}}}</code>, <code>{{#each list}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'}</p>
+                    ` : `
+                        <textarea class="ts-code ts-code--full" spellcheck="false"
+                            oninput="themeEditorSetCss(this.value)">${escapeHTML(ed.css)}</textarea>
+                        <p class="ts-hint">${isEs ? 'CSS libre: sin espacio de nombres ni variables obligatorias, es tu CSS.' : 'Free CSS: no required namespace or variables, it is just your CSS.'}</p>
+                    `}
+                </div>
+                <div class="ts-preview ts-preview--frame">
+                    <p class="ts-preview-title">${isEs ? 'Vista previa en vivo' : 'Live preview'}</p>
+                    <iframe id="theme-editor-preview-frame" class="ts-preview-iframe"></iframe>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function themeEditorSetName(v) {
+    if (state.themeEditor) state.themeEditor.name = v;
+}
+
+function themeEditorSetHtml(v) {
+    if (!state.themeEditor) return;
+    state.themeEditor.html = v;
+    _debounceThemePreview();
+}
+
+function themeEditorSetCss(v) {
+    if (!state.themeEditor) return;
+    state.themeEditor.css = v;
+    _debounceThemePreview();
+}
+
+function themeEditorSetTab(tab) {
+    state.themeEditorTab = tab;
+    renderApp();
+    refreshThemeEditorPreview();
+}
+
+let _themeEditorPreviewTimer = null;
+function _debounceThemePreview() {
+    clearTimeout(_themeEditorPreviewTimer);
+    _themeEditorPreviewTimer = setTimeout(refreshThemeEditorPreview, 250);
+}
+
+function refreshThemeEditorPreview() {
+    const frame = document.getElementById('theme-editor-preview-frame');
+    if (!frame || !state.themeEditor) return;
+    const isEs = state.lang === 'es';
+    const ctx = (state.findings && state.findings.length > 0) ? buildReportContext() : buildSampleReportContext();
+    let bodyHtml;
+    try {
+        bodyHtml = ThemeEngine.render(state.themeEditor.html, ctx);
+    } catch (e) {
+        bodyHtml = `<pre style="color:#dc2626;white-space:pre-wrap;padding:1.5rem;font-family:ui-monospace,monospace;">${escapeHTML((isEs ? 'Error en la plantilla: ' : 'Template error: ') + e.message)}</pre>`;
+    }
+    const doc = `<!doctype html><html><head><meta charset="utf-8"><style>${state.themeEditor.css || ''}</style></head><body>${bodyHtml}</body></html>`;
+    frame.srcdoc = doc;
 }
 
 async function saveThemeFromEditor() {
@@ -1900,227 +2109,121 @@ async function saveThemeFromEditor() {
     const isEs = state.lang === 'es';
     const name = (ed.name || '').trim();
     if (!name) {
-        state.themeManagerError = isEs ? 'Ponle un nombre al tema' : 'Give the theme a name';
-        renderApp();
+        alert(isEs ? 'El nombre del tema no puede estar vacío' : 'Theme name cannot be empty');
         return;
     }
     const slug = ed.slug || uniqueThemeSlug(name);
-    // Guardamos la paleta completa (var con prefijo --rt-) para que el export sea
-    // autosuficiente y todas las variables queden definidas.
-    const vars = {};
-    THEME_KEYS.forEach(k => { if (ed.vars[k]) vars[cssVarName(k)] = ed.vars[k]; });
-
     try {
-        await API.themes.create({ slug, name, base: ed.base, vars, custom_css: ed.customCss || '' });
+        await API.themes.create({ slug, name, html_template: ed.html || '', custom_css: ed.css || '' });
         await loadCustomThemes();
-        const live = document.getElementById('rt-editor-live');
-        if (live) live.remove();
-        state.themeEditor = null;
-        state.isThemeStudio = false;
-        state.showSettings = true;   // volvemos a Ajustes mostrando el tema nuevo
-        state.themeManagerSuccess = isEs ? 'Tema guardado' : 'Theme saved';
-        setReportTheme(slug);  // aplica y re-renderiza
-    } catch (err) {
-        state.themeManagerError = err.message || (isEs ? 'No se pudo guardar el tema' : 'Could not save theme');
-        renderApp();
+        closeThemeEditor();
+        state.showThemesPage = true;
+        setReportTheme(slug);
+    } catch (e) {
+        alert((isEs ? 'Error al guardar el tema: ' : 'Error saving theme: ') + e.message);
     }
 }
 
 async function deleteCustomTheme(id, slug) {
     const isEs = state.lang === 'es';
-    if (!confirm(isEs ? '¿Eliminar este tema?' : 'Delete this theme?')) return;
+    if (!confirm(isEs ? '¿Eliminar este tema? Esta acción no se puede deshacer.' : 'Delete this theme? This cannot be undone.')) return;
     try {
         await API.themes.delete(id);
-        if (state.reportTheme === slug) setReportTheme('light');
         await loadCustomThemes();
+        if (state.reportTheme === slug) {
+            state.reportTheme = (state.customThemes[0] && state.customThemes[0].slug) || '';
+            applyThemeAttributes(state.reportTheme);
+            persistSettings();
+        }
         renderApp();
-    } catch (err) {
-        alert((isEs ? 'Error: ' : 'Error: ') + err.message);
+    } catch (e) {
+        alert((isEs ? 'Error al eliminar: ' : 'Error deleting: ') + e.message);
     }
 }
 
-function exportTheme(slug) {
-    const meta = listAllThemes().find(t => t.slug === slug);
-    if (!meta) return;
-    const palette = resolveThemePalette(slug);
-    const vars = {};
-    THEME_KEYS.forEach(k => { if (palette[k]) vars[cssVarName(k)] = palette[k]; });
-    const data = {
-        pwnly_theme: true,
-        name: meta.name,
-        base: meta.base || 'light',
-        vars,
-        custom_css: meta.custom_css || ''
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+function _downloadText(text, filename, mime) {
+    const blob = new Blob([text], { type: mime || 'text/plain' });
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `pwnly-theme-${slug}.json`;
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    a.remove();
+    URL.revokeObjectURL(a.href);
 }
 
-// Descarga una PLANTILLA HTML autocontenida para que el usuario diseñe su propio
-// tema editando las variables CSS --rt-* y viéndolo en vivo en el navegador. El
-// fichero resultante puede importarse después con "Importar" (acepta .html).
-function downloadThemeTemplate(palOverride, nameOverride) {
-    const isEs = state.lang === 'es';
-    const pal = palOverride || resolveThemePalette(state.reportTheme) || BUILTIN_THEMES.light;
-    const themeName = (nameOverride || 'Mi tema personalizado').toString();
-    const labelOf = {};
-    THEME_KEY_LABELS && Object.keys(THEME_KEY_LABELS).forEach(k => { labelOf[k] = isEs ? THEME_KEY_LABELS[k].es : THEME_KEY_LABELS[k].en; });
-
-    const varLines = THEME_KEYS.map(k => {
-        const comment = labelOf[k] ? `  /* ${labelOf[k]} */` : '';
-        return `    ${cssVarName(k)}: ${pal[k] || ''};${comment}`;
-    }).join('\n');
-
-    const tpl = `<!DOCTYPE html>
-<html lang="${state.lang}" data-theme-name="${escapeHTML(themeName)}" data-theme-base="${escapeHTML(palOverride && state.themeEditor ? state.themeEditor.base : 'light')}">
-<head>
-<meta charset="UTF-8">
-<title>${escapeHTML(themeName)} — Plantilla de tema Pwnly</title>
+// Exporta el tema como un único .html autocontenido: el CSS en un <style> y el
+// HTML de la plantilla dentro de un <template> (inerte: se puede abrir en el
+// navegador sin que el motor de temas se ejecute). Pensado para reimportarse
+// con "Importar tema" o editarse a mano y volver a subirlo.
+function exportTheme(slug) {
+    const th = (state.customThemes || []).find(t => t.slug === slug);
+    if (!th) return;
+    const bundle = `<!doctype html>
 <!--
-  ${isEs ? 'PLANTILLA DE TEMA PWNLY' : 'PWNLY THEME TEMPLATE'}
-  ${isEs
-    ? '1) Edita los colores de las variables --rt-* de abajo (bloque :root).\n       2) Abre este archivo en el navegador para previsualizar el resultado en vivo.\n       3) Cambia data-theme-name (arriba) por el nombre de tu tema.\n       4) (Opcional) Escribe CSS extra en el bloque <style id="pwnly-custom-css">.\n       5) En Pwnly: Ajustes -> Tema del informe -> Importar, y selecciona este .html.'
-    : '1) Edit the --rt-* color variables below (:root block).\n       2) Open this file in a browser to preview live.\n       3) Change data-theme-name (above) to your theme name.\n       4) (Optional) Add extra CSS in the <style id="pwnly-custom-css"> block.\n       5) In Pwnly: Settings -> Report theme -> Import, and choose this .html.'}
+  Tema de Pwnly -- "${th.name}"
+  Para importarlo de nuevo: Temas -> Importar tema (.html) y selecciona este archivo.
+  Puedes editar el CSS y el HTML de abajo directamente antes de volver a importarlo.
 -->
-<style id="pwnly-theme-vars">
-:root {
-${varLines}
-}
-</style>
-<!-- ${isEs ? 'CSS adicional opcional (se aplicará al informe)' : 'Optional extra CSS (applied to the report)'} -->
-<style id="pwnly-custom-css">
-</style>
-<style>
-  body { margin:0; background:var(--rt-pageBg); color:var(--rt-textBody);
-         font-family:'Inter',system-ui,sans-serif; padding:2.5rem; }
-  .wrap { max-width:780px; margin:0 auto; }
-  .hint { background:#fef9c3; border:1px solid #fde047; color:#713f12; border-radius:10px;
-          padding:0.9rem 1.1rem; font-size:0.85rem; margin-bottom:2rem; }
-  h1 { color:var(--rt-textPrimary); font-size:2.2rem; font-weight:900; margin:0 0 0.4rem; }
-  .bar { width:64px; height:5px; border-radius:5px; background:var(--rt-accentBar,var(--rt-accentLine)); margin-bottom:1.6rem; }
-  .card { background:var(--rt-cardBg); border:1px solid var(--rt-border); border-radius:12px; padding:1.2rem 1.4rem; margin-bottom:1.2rem; }
-  .card h2 { color:var(--rt-textHeading); margin:0 0 0.5rem; font-size:1.15rem; }
-  .card p { color:var(--rt-textBody); margin:0 0 0.4rem; line-height:1.6; }
-  .muted { color:var(--rt-textMuted); font-size:0.82rem; }
-  .poc { background:var(--rt-pocBg); border:1px solid var(--rt-pocBorder); border-radius:10px; padding:1rem 1.2rem; }
-  .poc .t { color:var(--rt-pocHeading); font-weight:700; font-size:0.8rem; margin-bottom:0.4rem; }
-  .poc pre { color:var(--rt-pocText); font-family:ui-monospace,monospace; font-size:0.82rem; margin:0; white-space:pre-wrap; }
-  .ver { color:var(--rt-versionColor,var(--rt-accentLine)); font-weight:700; }
+<html data-pwnly-theme-name="${escapeHTML(th.name)}">
+<head>
+<meta charset="utf-8">
+<title>${escapeHTML(th.name)} — Tema Pwnly</title>
+<style id="pwnly-theme-css">
+${th.custom_css || ''}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hint">${isEs
-        ? 'Plantilla de tema · edita las variables <b>--rt-*</b> del <b>&lt;style id="pwnly-theme-vars"&gt;</b> y vuelve a importar este archivo en Pwnly.'
-        : 'Theme template · edit the <b>--rt-*</b> variables in <b>&lt;style id="pwnly-theme-vars"&gt;</b> and import this file back into Pwnly.'}</div>
-    <h1>${isEs ? 'Informe de ejemplo' : 'Sample report'}</h1>
-    <div class="bar"></div>
-    <div class="card">
-      <h2>${isEs ? 'Hallazgo de ejemplo' : 'Sample finding'}</h2>
-      <p>${isEs ? 'Así se verá el texto del cuerpo de tu informe con este tema.' : 'This is how your report body text will look with this theme.'}</p>
-      <p class="muted">${isEs ? 'Texto secundario · CVSS 7.5 · ' : 'Secondary text · CVSS 7.5 · '}<span class="ver">v1.0</span></p>
-    </div>
-    <div class="poc">
-      <div class="t">${isEs ? 'Pasos para Reproducir (PoC)' : 'Steps to Reproduce (PoC)'}</div>
-      <pre>$ id; whoami
-www-data</pre>
-    </div>
-  </div>
+<template id="pwnly-theme-html">
+${th.html_template || ''}
+</template>
 </body>
-</html>`;
-
-    const blob = new Blob([tpl], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'pwnly-plantilla-tema.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+</html>
+`;
+    _downloadText(bundle, `pwnly-tema-${slug}.html`, 'text/html');
 }
 
-// Extrae un tema (name/base/vars/custom_css) de una plantilla HTML.
-function parseThemeFromHtml(text) {
+function parseThemeBundle(text) {
     const doc = new DOMParser().parseFromString(text, 'text/html');
-    const root = doc.documentElement;
-    const name = (root.getAttribute('data-theme-name') || doc.title || 'Tema HTML').toString().trim().slice(0, 60) || 'Tema HTML';
-    const baseAttr = root.getAttribute('data-theme-base');
-    const base = ['light', 'dark', 'htb'].includes(baseAttr) ? baseAttr : 'light';
-
-    const styleEl = doc.getElementById('pwnly-theme-vars')
-        || Array.from(doc.querySelectorAll('style')).find(s => (s.textContent || '').includes('--rt-'));
-    const vars = {};
-    if (styleEl) {
-        const m = (styleEl.textContent || '').match(/:root\s*\{([\s\S]*?)\}/);
-        const body = m ? m[1] : (styleEl.textContent || '');
-        body.replace(/(--rt-[a-zA-Z0-9-]+)\s*:\s*([^;]+);/g, (all, k, v) => {
-            vars[k.trim()] = v.trim();
-            return '';
-        });
-    }
-    const cssEl = doc.getElementById('pwnly-custom-css');
-    const custom_css = cssEl ? (cssEl.textContent || '').trim() : '';
-    return { name, base, vars, custom_css };
+    const titleText = doc.querySelector('title') ? doc.querySelector('title').textContent : '';
+    const name = (doc.documentElement.getAttribute('data-pwnly-theme-name') || titleText.replace(/ — Tema Pwnly$/, '')).trim();
+    const cssEl = doc.getElementById('pwnly-theme-css');
+    const htmlEl = doc.getElementById('pwnly-theme-html');
+    return {
+        name,
+        css: cssEl ? cssEl.textContent : '',
+        html: htmlEl ? htmlEl.innerHTML : ''
+    };
 }
 
 async function importThemeFile(input) {
     const file = input.files && input.files[0];
-    input.value = '';
     if (!file) return;
     const isEs = state.lang === 'es';
+    const text = await file.text();
+    let parsed;
     try {
-        const text = await file.text();
-        const isHtml = /\.html?$/i.test(file.name) || /^\s*<!doctype html|<html[\s>]/i.test(text);
-        let data;
-        if (isHtml) {
-            data = parseThemeFromHtml(text);
-        } else {
-            data = JSON.parse(text);
-        }
-        if (!data || typeof data !== 'object' || !data.vars || !Object.keys(data.vars).length) {
-            throw new Error(isEs ? 'El archivo no contiene un tema válido (sin variables --rt-*)' : 'File has no valid theme (no --rt-* variables)');
-        }
-        const name = (data.name || 'Tema importado').toString().slice(0, 60);
-        const base = ['light', 'dark', 'htb'].includes(data.base) ? data.base : 'light';
-        const slug = uniqueThemeSlug(name);
-        await API.themes.create({ slug, name, base, vars: data.vars, custom_css: data.custom_css || '' });
-        await loadCustomThemes();
-        state.themeManagerSuccess = isEs ? 'Tema importado' : 'Theme imported';
-        setReportTheme(slug);
-    } catch (err) {
-        alert((isEs ? 'Error al importar el tema: ' : 'Error importing theme: ') + err.message);
+        parsed = parseThemeBundle(text);
+        if (!parsed.html && !parsed.css) throw new Error('empty');
+    } catch (e) {
+        alert(isEs ? 'No se pudo leer el archivo de tema.' : 'Could not read the theme file.');
+        input.value = '';
+        return;
     }
-}
-
-function renderThemeEditorPreview() {
-    const v = state.themeEditor ? state.themeEditor.vars : BUILTIN_THEMES.light;
-    const g = (k) => v[k] || '';
-    return `
-        <div id="theme-editor-preview" style="border-radius:10px;overflow:hidden;border:1px solid ${g('border')};background:${g('pageBg')};padding:1rem;">
-            <div style="font-size:1.1rem;font-weight:800;color:${g('textPrimary')};margin-bottom:0.35rem;">Aa Título de portada</div>
-            <div style="height:4px;width:48px;border-radius:4px;background:${g('accentLine')};margin-bottom:0.75rem;"></div>
-            <div style="background:${g('cardBg')};border:1px solid ${g('border')};border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
-                <div style="color:${g('textHeading')};font-weight:800;margin-bottom:0.25rem;">Hallazgo de ejemplo</div>
-                <div style="color:${g('textBody')};font-size:0.8rem;">Texto del cuerpo del informe.</div>
-                <div style="color:${g('textMuted')};font-size:0.72rem;margin-top:0.2rem;">Texto secundario · CVSS 7.5</div>
-            </div>
-            <div style="background:${g('pocBg')};border:1px solid ${g('pocBorder') || g('border')};border-radius:8px;padding:0.6rem 0.75rem;">
-                <div style="color:${g('pocHeading')};font-weight:700;font-size:0.75rem;margin-bottom:0.2rem;">PoC</div>
-                <div style="color:${g('pocText')};font-family:monospace;font-size:0.72rem;">$ id; whoami</div>
-            </div>
-        </div>`;
+    const name = parsed.name || file.name.replace(/\.html?$/i, '');
+    const slug = uniqueThemeSlug(name);
+    try {
+        await API.themes.create({ slug, name, html_template: parsed.html, custom_css: parsed.css });
+        await loadCustomThemes();
+        renderApp();
+    } catch (e) {
+        alert((isEs ? 'Error al importar: ' : 'Error importing: ') + e.message);
+    }
+    input.value = '';
 }
 
 // --------------------------------------------------------------------------- //
-// Calculadora CVSS 3.1 (Base Score)
+// Calculadora CVSS 3.1 (independiente del sistema de temas)
 // --------------------------------------------------------------------------- //
 const CVSS_METRIC_DEFS = [
     { id: 'AV', es: 'Vector de ataque', en: 'Attack Vector', opts: [['N', 'Red'], ['A', 'Adyacente'], ['L', 'Local'], ['P', 'Físico']], optsEn: [['N', 'Network'], ['A', 'Adjacent'], ['L', 'Local'], ['P', 'Physical']] },
@@ -2286,293 +2389,10 @@ function renderCvssCalcModal() {
         </div>`;
 }
 
-// Etiquetas y agrupación de TODAS las variables del tema para el Estudio de temas.
-const THEME_KEY_LABELS = {
-    pageBg:        { es: 'Fondo de página',        en: 'Page background' },
-    cardBg:        { es: 'Fondo de tarjetas',      en: 'Card background' },
-    cardBgAlt:     { es: 'Fondo tarjeta (alt)',    en: 'Card background (alt)' },
-    greenBg:       { es: 'Fondo verde',            en: 'Green background' },
-    orangeBg:      { es: 'Fondo naranja',          en: 'Orange background' },
-    purpleBg:      { es: 'Fondo morado',           en: 'Purple background' },
-    metaBg:        { es: 'Fondo cabecera datos',   en: 'Meta header bg' },
-    textPrimary:   { es: 'Título de portada',      en: 'Cover title' },
-    textHeading:   { es: 'Títulos',                en: 'Headings' },
-    textBody:      { es: 'Texto del cuerpo',       en: 'Body text' },
-    textMuted:     { es: 'Texto secundario',       en: 'Secondary text' },
-    textFaint:     { es: 'Texto tenue',            en: 'Faint text' },
-    textSubtle:    { es: 'Texto sutil',            en: 'Subtle text' },
-    textGray:      { es: 'Texto gris',             en: 'Gray text' },
-    textGrayMed:   { es: 'Texto gris medio',       en: 'Medium gray text' },
-    coverAccent:   { es: 'Acento de portada',      en: 'Cover accent' },
-    accentLine:    { es: 'Línea de acento',        en: 'Accent line' },
-    accentBar:     { es: 'Barra de acento',        en: 'Accent bar' },
-    versionColor:  { es: 'Color de versión',       en: 'Version color' },
-    textRed:       { es: 'Texto rojo',             en: 'Red text' },
-    textOrange:    { es: 'Texto naranja',          en: 'Orange text' },
-    textOrangeDark:{ es: 'Texto naranja oscuro',   en: 'Dark orange text' },
-    textGreen:     { es: 'Texto verde',            en: 'Green text' },
-    textGreenDark: { es: 'Texto verde oscuro',     en: 'Dark green text' },
-    border:        { es: 'Bordes',                 en: 'Borders' },
-    borderLight:   { es: 'Borde claro',            en: 'Light border' },
-    borderMeta:    { es: 'Borde cabecera datos',   en: 'Meta border' },
-    borderMetaSub: { es: 'Borde cabecera (sub)',   en: 'Meta border (sub)' },
-    borderGreen:   { es: 'Borde verde',            en: 'Green border' },
-    borderOrange:  { es: 'Borde naranja',          en: 'Orange border' },
-    borderPurple:  { es: 'Borde morado',           en: 'Purple border' },
-    borderFaint:   { es: 'Borde tenue',            en: 'Faint border' },
-    classifBg:     { es: 'Fondo clasificación',    en: 'Classification bg' },
-    classifBorder: { es: 'Borde clasificación',    en: 'Classification border' },
-    classifText:   { es: 'Texto clasificación',    en: 'Classification text' },
-    pocBg:         { es: 'Fondo de código (PoC)',  en: 'Code (PoC) bg' },
-    pocBorder:     { es: 'Borde de código',        en: 'Code border' },
-    pocText:       { es: 'Texto de código',        en: 'Code text' },
-    pocHeading:    { es: 'Título de código',       en: 'Code heading' }
-};
-
-const THEME_GROUPS = [
-    { es: 'Fondos',        en: 'Backgrounds', keys: ['pageBg', 'cardBg', 'cardBgAlt', 'metaBg', 'greenBg', 'orangeBg', 'purpleBg'] },
-    { es: 'Texto',         en: 'Text',        keys: ['textPrimary', 'textHeading', 'textBody', 'textMuted', 'textFaint', 'textSubtle', 'textGray', 'textGrayMed'] },
-    { es: 'Acentos',       en: 'Accents',     keys: ['coverAccent', 'accentLine', 'accentBar', 'versionColor'] },
-    { es: 'Estados (texto)',en: 'Status (text)', keys: ['textRed', 'textOrange', 'textOrangeDark', 'textGreen', 'textGreenDark'] },
-    { es: 'Bordes',        en: 'Borders',     keys: ['border', 'borderLight', 'borderMeta', 'borderMetaSub', 'borderGreen', 'borderOrange', 'borderPurple', 'borderFaint'] },
-    { es: 'Clasificación', en: 'Classification', keys: ['classifBg', 'classifBorder', 'classifText'] },
-    { es: 'Código / PoC',  en: 'Code / PoC',  keys: ['pocBg', 'pocBorder', 'pocText', 'pocHeading'] }
-];
-
-// Página completa de personalización de tema (Estudio de temas). Reutiliza el
-// estado y los setters de themeEditor; se abre desde "+ Nuevo" o al editar un tema.
-function renderThemeStudio() {
-    const ed = state.themeEditor;
-    if (!ed) return '';
-    const isEs = state.lang === 'es';
-
-    const field = (key) => {
-        const val = ed.vars[key] || '';
-        const isHex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val);
-        const label = (THEME_KEY_LABELS[key] ? (isEs ? THEME_KEY_LABELS[key].es : THEME_KEY_LABELS[key].en) : key);
-        const colorCtl = isHex
-            ? `<input type="color" value="${val}" oninput="themeEditorSetVar('${key}', this.value)" class="ts-color">`
-            : `<span class="ts-swatch" style="background:${escapeHTML(val)};"></span>`;
-        return `
-            <div class="ts-field">
-                <span class="ts-field-label" title="${escapeHTML(key)}">${label}</span>
-                <div class="ts-field-ctl">
-                    <input type="text" value="${escapeHTML(val)}" spellcheck="false" oninput="themeEditorSetVar('${key}', this.value)" class="ts-text">
-                    ${colorCtl}
-                </div>
-            </div>`;
-    };
-
-    const groups = THEME_GROUPS.map(g => `
-        <details class="ts-group" open>
-            <summary>${isEs ? g.es : g.en}</summary>
-            <div class="ts-group-body">${g.keys.map(field).join('')}</div>
-        </details>`).join('');
-
-    const codePanel = `
-        <details class="ts-group">
-            <summary>${isEs ? 'CSS avanzado (control total)' : 'Advanced CSS (full control)'}</summary>
-            <div class="ts-group-body">
-                <textarea spellcheck="false" class="ts-code" placeholder=".cover-page h1 { text-transform: uppercase; }\n.finding-preview h3 { letter-spacing:-.02em; }" oninput="themeEditorSetCustomCss(this.value)">${escapeHTML(ed.customCss || '')}</textarea>
-                <p class="ts-hint">${isEs
-                    ? 'Se aplica solo a este tema. Selectores: <code>.cover-page</code>, <code>.finding-preview</code>, <code>.preview-container</code>, <code>h1..h4</code>.'
-                    : 'Applies only to this theme. Selectors: <code>.cover-page</code>, <code>.finding-preview</code>, <code>.preview-container</code>, <code>h1..h4</code>.'}</p>
-            </div>
-        </details>`;
-
-    return `
-        <div class="theme-studio">
-            <header class="theme-studio-header">
-                <div class="ts-head-left">
-                    <button class="account-back-btn" onclick="closeThemeEditor()">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                        ${isEs ? 'Volver' : 'Back'}
-                    </button>
-                    <h1>${ed.isNew ? (isEs ? 'Estudio de temas — nuevo' : 'Theme studio — new') : (isEs ? 'Estudio de temas — editar' : 'Theme studio — edit')}</h1>
-                </div>
-                <div class="ts-head-actions">
-                    <button class="btn-secondary" onclick="downloadThemeStudioJson()">JSON</button>
-                    <button class="btn-secondary" onclick="downloadThemeStudioTemplate()">${isEs ? 'Plantilla HTML' : 'HTML template'}</button>
-                    <button class="btn-primary" onclick="saveThemeFromEditor()">${isEs ? 'Guardar en la app' : 'Save to app'}</button>
-                </div>
-            </header>
-
-            <div class="theme-studio-body">
-                <div class="ts-controls">
-                    <div class="ts-field" style="border:none;">
-                        <span class="ts-field-label">${isEs ? 'Nombre' : 'Name'}</span>
-                        <input type="text" class="ts-text" style="width:170px;" value="${escapeHTML(ed.name)}" oninput="state.themeEditor.name = this.value" placeholder="${isEs ? 'Mi tema corporativo' : 'My corporate theme'}">
-                    </div>
-                    <div class="ts-field">
-                        <span class="ts-field-label">${isEs ? 'Basado en' : 'Based on'}</span>
-                        <select class="ts-text" style="width:170px;" onchange="themeEditorSetBase(this.value)">
-                            <option value="light" ${ed.base === 'light' ? 'selected' : ''}>${isEs ? 'Claro' : 'Light'}</option>
-                            <option value="dark" ${ed.base === 'dark' ? 'selected' : ''}>${isEs ? 'Oscuro' : 'Dark'}</option>
-                            <option value="htb" ${ed.base === 'htb' ? 'selected' : ''}>HTB</option>
-                        </select>
-                    </div>
-                    ${groups}
-                    ${codePanel}
-                    ${state.themeManagerError ? `<div class="login-error" style="margin-top:0.6rem;">${escapeHTML(state.themeManagerError)}</div>` : ''}
-                </div>
-                <div class="ts-preview">
-                    <p class="ts-preview-title">${isEs ? 'Vista previa en vivo' : 'Live preview'}</p>
-                    ${renderThemeEditorPreview()}
-                </div>
-            </div>
-        </div>`;
-}
-
-// Exporta el tema en edición como JSON importable.
-function downloadThemeStudioJson() {
-    const ed = state.themeEditor;
-    if (!ed) return;
-    const vars = {};
-    THEME_KEYS.forEach(k => { if (ed.vars[k]) vars[cssVarName(k)] = ed.vars[k]; });
-    const data = { pwnly_theme: true, name: ed.name || 'Tema', base: ed.base || 'light', vars, custom_css: ed.customCss || '' };
-    _downloadBytes(new TextEncoder().encode(JSON.stringify(data, null, 2)),
-        `pwnly-theme-${slugify(ed.name) || 'tema'}.json`, 'application/json');
-}
-
-// Exporta el tema en edición como plantilla HTML editable.
-function downloadThemeStudioTemplate() {
-    const ed = state.themeEditor;
-    if (!ed) return;
-    downloadThemeTemplate(ed.vars, ed.name || 'Mi tema personalizado');
-}
-
-function renderCvssSummary() {
-    const total = state.findings.length;
-    if (total === 0) return '';
-
-    const t = UI[state.lang];
-    const c2 = getThemeColors();
-    const counts = {
-        crit: state.findings.filter(f => f.severity === 'crit').length,
-        high: state.findings.filter(f => f.severity === 'high').length,
-        med: state.findings.filter(f => f.severity === 'med').length,
-        low: state.findings.filter(f => f.severity === 'low').length,
-        info: state.findings.filter(f => f.severity === 'info').length
-    };
-
-    const colors = {
-        crit: 'var(--severity-crit, #dc2626)',
-        high: 'var(--severity-high, #f97316)',
-        med: 'var(--severity-med, #eab308)',
-        low: 'var(--severity-low, #22c55e)',
-        info: 'var(--severity-info, #6b7280)'
-    };
-
-    const cardBg   = c2.cardBg;
-    const border   = c2.border;
-    const textMuted = c2.textMuted;
-    const textHead  = c2.textHeading;
-    const borderH3  = c2.borderFaint;
-
-    const order = ['crit', 'high', 'med', 'low', 'info'];
-    let barSegments = '';
-    let legendItems = '';
-
-    for (const sev of order) {
-        if (counts[sev] > 0) {
-            const pct = (counts[sev] / total) * 100;
-            barSegments += `<div style="width: ${pct}%; background-color: ${colors[sev]}; height: 100%; transition: width 0.3s;" title="${t.severityLevels[sev]}: ${counts[sev]}"></div>`;
-        }
-
-        legendItems += `
-            <div style="display: flex; align-items: center; gap: 0.5rem; background: ${cardBg}; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid ${border};">
-                <div style="width: 12px; height: 12px; border-radius: 50%; background-color: ${colors[sev]};"></div>
-                <span style="font-weight: 500; color: ${textMuted};">${t.severityLevels[sev]}</span>
-                <span style="font-weight: 800; color: ${textHead}; margin-left: 0.25rem;">${counts[sev]}</span>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="cvss-summary card" style="margin: 2rem 0; padding: 1.5rem; page-break-inside: avoid; background: ${cardBg}; border-color: ${border};">
-            <h3 style="margin-bottom: 1.5rem; border-bottom: 1px solid ${borderH3}; padding-bottom: 0.75rem; color: ${textHead};">${t.cvssSummaryTitle}</h3>
-
-            ${state.pdfShowSeverityBars ? `
-            <div style="display: flex; height: 28px; width: 100%; border-radius: 6px; overflow: hidden; margin-bottom: 1.5rem; box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06);">
-                ${barSegments}
-            </div>
-            ` : ''}
-
-            <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
-                ${legendItems}
-            </div>
-        </div>
-    `;
-}
-
-// Código de hallazgo legible (F-01, F-02, …).
-function findingCode(idx) { return 'F-' + String(idx + 1).padStart(2, '0'); }
-
-function findingStatusBadge(status) {
-    status = status || 'open';
-    const label = (UI[state.lang].findingStatuses || {})[status] || status;
-    return `<span class="finding-status-badge status-${status}">${escapeHTML(label)}</span>`;
-}
-
-// Bloque de metadatos profesionales por hallazgo (estado, riesgo, OWASP, activos,
-// vector CVSS, cumplimiento, referencias adicionales, re-test).
-function renderFindingProMeta(f, c, t) {
-    const isEs = state.lang === 'es';
-    const riskLbl = (k) => (UI[state.lang].riskLevels || {})[k] || k;
-    const rows = [];
-
-    const owasp = f.owasp || '';
-    const vec = f.cvssVector || f.cvss_vector || '';
-    const assets = f.affectedAssets || f.affected_assets || '';
-    const likelihood = f.likelihood || '';
-    const impactRating = f.impactRating || f.impact_rating || '';
-    const refs = Array.isArray(f.references) ? f.references : [];
-    const comp = Array.isArray(f.compliance) ? f.compliance : [];
-    const retest = f.retestNotes || f.retest_notes || '';
-
-    const item = (label, value) => `
-        <div style="padding:0.5rem 0;border-bottom:1px solid ${c.borderFaint};">
-            <span style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:${c.textGray};">${label}</span>
-            <div style="font-size:0.9rem;color:${c.textBody};margin-top:0.15rem;">${value}</div>
-        </div>`;
-
-    // Estos 4 metadatos son OPT-IN: solo se incluyen si su toggle está activado.
-    const vis = (key) => getFindingFieldVis(f, key);
-
-    if (owasp && vis('owasp')) rows.push(item(isEs ? 'OWASP Top 10' : 'OWASP Top 10', escapeHTML(owasp)));
-    if ((likelihood || impactRating) && vis('risk')) {
-        rows.push(item(isEs ? 'Probabilidad × Impacto' : 'Likelihood × Impact',
-            `${escapeHTML(riskLbl(likelihood) || '—')} × ${escapeHTML(riskLbl(impactRating) || '—')}`));
-    }
-    if (vec) rows.push(item(isEs ? 'Vector CVSS' : 'CVSS Vector', `<span style="font-family:ui-monospace,monospace;font-size:0.8rem;word-break:break-all;">${escapeHTML(vec)}</span>`));
-    if (assets) rows.push(item(isEs ? 'Activos afectados' : 'Affected assets', `<span style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:0.82rem;">${formatMultiline(assets)}</span>`));
-    if (comp.length && vis('compliance')) rows.push(item(isEs ? 'Cumplimiento / mapeo' : 'Compliance / mapping',
-        comp.map(x => `<span class="pro-tag" style="background:rgba(99,102,241,0.12);color:${c.textHeading};">${escapeHTML(x)}</span>`).join(' ')));
-    if (refs.length) rows.push(item(isEs ? 'Referencias adicionales' : 'Additional references',
-        refs.map(r => `<a href="${escapeHTML(r)}" target="_blank" style="color:#3b82f6;text-decoration:none;word-break:break-all;display:block;">${escapeHTML(r)}</a>`).join('')));
-
-    let html = '';
-    if (rows.length) {
-        html += `<div style="background:${c.cardBg};border:1px solid ${c.border};border-radius:8px;padding:0.5rem 1.25rem;margin-bottom:1.5rem;">${rows.join('')}</div>`;
-    }
-    if (retest && vis('retest')) {
-        html += `
-            <div style="margin-bottom:1.5rem;background:${c.cardBgAlt};border:1px dashed ${c.borderMetaSub};border-radius:8px;padding:1rem 1.25rem;">
-                <h4 style="font-size:0.95rem;font-weight:700;color:${c.textMuted};margin:0 0 0.4rem;display:flex;align-items:center;gap:0.4rem;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
-                    ${isEs ? 'Notas de re-test' : 'Re-test notes'}
-                </h4>
-                <div style="color:${c.textFaint};line-height:1.65;margin:0;">${markdownToHtml(retest)}</div>
-            </div>`;
-    }
-    return html;
-}
-
-// Página de Alcance y Metodología para el informe.
 // Campos del alcance que se imprimen en el informe. El engagement no tiene
 // interruptor (siempre se muestra si hay fechas); el resto son opt-in por campo.
-// Ya no existe un interruptor de sección: la página aparece si hay algún campo
-// visible con contenido. Usado tanto por el informe como por su índice (TOC).
+// No hay interruptor de sección: la sección aparece si hay algún campo visible
+// con contenido. Usado por buildReportContext() para la sección de alcance.
 function scopeSectionVisibleFields(d) {
     const std = d.methodologyStandards || [];
     const stdLabels = METHODOLOGY_STANDARDS.filter(s => std.includes(s.key)).map(s => s.label);
@@ -2594,496 +2414,290 @@ function scopeSectionHasContent(d) {
     return !!(s.showDates || s.showScopeIn || s.showScopeOut || s.showStd || s.showNotes || s.showTools);
 }
 
-function renderScopeMethodologyPreview(c, t) {
+// --------------------------------------------------------------------------- //
+// Datos del reporte expuestos al motor de plantillas (ThemeEngine). Acepta
+// overrides opcionales (auditData/findings/showBars) para poder construir un
+// contexto de EJEMPLO sin depender del estado global (ver buildSampleReportContext).
+// --------------------------------------------------------------------------- //
+function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
+    const d = auditDataParam || state.auditData;
+    const findingsSrc = findingsParam || state.findings;
+    const showBars = (typeof showBarsParam === 'boolean') ? showBarsParam : !!state.pdfShowSeverityBars;
+    const t = UI[state.lang];
     const isEs = state.lang === 'es';
-    const d = state.auditData;
-    const { stdLabels, showDates, showScopeIn, showScopeOut, showStd, showNotes, showTools } = scopeSectionVisibleFields(d);
+    const riskLbl = (k) => (t.riskLevels || {})[k] || k || '';
 
-    if (!(showDates || showScopeIn || showScopeOut || showStd || showNotes || showTools)) return '';
-
-    const block = (title, body, mono) => body ? `
-        <div style="margin-bottom:1.5rem;">
-            <h3 style="font-size:1.15rem;color:${c.textBody};margin:0 0 0.6rem;font-weight:700;">${title}</h3>
-            <div style="background:${c.cardBgAlt};border:1px solid ${c.borderMeta};border-radius:10px;padding:1.1rem 1.4rem;color:${c.textMuted};line-height:1.7;${mono ? 'font-family:ui-monospace,monospace;font-size:0.85rem;' : ''}">${mono ? `<span style="white-space:pre-wrap;">${formatMultiline(body)}</span>` : markdownToHtml(body)}</div>
-        </div>` : '';
-
-    const dates = showDates
-        ? `${escapeHTML(d.engagementStart || '—')} → ${escapeHTML(d.engagementEnd || '—')}`
-        : '';
-
-    return `
-        <div id="scope" style="padding: 2rem 0; page-break-before: always; background: ${c.pageBg};">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 3px solid ${c.accentLine}; padding-bottom: 0.75rem; margin-bottom: 2rem;">
-                <h2 style="font-size: 2rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${isEs ? 'Alcance y Metodología' : 'Scope & Methodology'}</h2>
-                ${renderTlpPageBadge(d)}
-            </div>
-            ${dates ? block(isEs ? 'Ventana del engagement' : 'Engagement window', dates, true) : ''}
-            ${showScopeIn ? block(isEs ? 'Dentro del alcance' : 'In-scope', d.scopeIn, true) : ''}
-            ${showScopeOut ? block(isEs ? 'Fuera del alcance / exclusiones' : 'Out-of-scope / exclusions', d.scopeOut, true) : ''}
-            ${showStd ? `
-                <div style="margin-bottom:1.5rem;">
-                    <h3 style="font-size:1.15rem;color:${c.textBody};margin:0 0 0.6rem;font-weight:700;">${isEs ? 'Metodologías y estándares' : 'Methodologies & standards'}</h3>
-                    <div class="pro-tags">${stdLabels.map(l => `<span class="pro-tag" style="background:rgba(37,99,235,0.12);color:${c.textHeading};font-size:0.8rem;">${escapeHTML(l)}</span>`).join('')}</div>
-                </div>` : ''}
-            ${showNotes ? block(isEs ? 'Notas de metodología' : 'Methodology notes', d.methodologyNotes, false) : ''}
-            ${showTools ? block(isEs ? 'Herramientas utilizadas' : 'Tools used', d.toolsUsed, true) : ''}
-        </div>`;
-}
-
-// Matriz de riesgo Probabilidad × Impacto en el resumen ejecutivo.
-function renderRiskMatrix(c, t) {
-    const isEs = state.lang === 'es';
-    // Deriva probabilidad/impacto del hallazgo; si faltan, se infiere de la severidad.
-    const sevToRisk = { crit: ['high', 'high'], high: ['high', 'med'], med: ['med', 'med'], low: ['low', 'med'], info: ['low', 'low'] };
-    const cells = { high: { high: 0, med: 0, low: 0 }, med: { high: 0, med: 0, low: 0 }, low: { high: 0, med: 0, low: 0 } };
-    let any = false;
-    state.findings.forEach(f => {
-        // Opt-in: solo entran en la matriz los hallazgos con el toggle "riesgo" activado.
-        if (!getFindingFieldVis(f, 'risk')) return;
-        let lk = f.likelihood, im = f.impactRating || f.impact_rating;
-        if (!lk || !im) { const d = sevToRisk[f.severity] || ['med', 'med']; lk = lk || d[0]; im = im || d[1]; }
-        if (cells[lk] && cells[lk][im] !== undefined) { cells[lk][im]++; any = true; }
-    });
-    // Si ningún hallazgo tiene el riesgo activado, la sección entera se omite.
-    if (!any) return '';
-
-    const order = ['high', 'med', 'low'];
-    const lbl = (k) => (UI[state.lang].riskLevels || {})[k] || k;
-    // Color de celda según nivel de riesgo combinado.
-    const cellColor = (lk, im) => {
-        const score = { high: 3, med: 2, low: 1 }[lk] * { high: 3, med: 2, low: 1 }[im];
-        if (score >= 9) return '#dc2626';
-        if (score >= 6) return '#f97316';
-        if (score >= 3) return '#eab308';
-        return '#22c55e';
+    const classLabels = {
+        '1': isEs ? 'Público' : 'Public',
+        '2': isEs ? 'Interno' : 'Internal',
+        '3': isEs ? 'Confidencial' : 'Confidential',
+        '4': isEs ? 'Restringido' : 'Restricted'
     };
 
-    const headerRow = `<tr><th style="padding:0.5rem;"></th>${order.map(im => `<th style="padding:0.5rem;font-size:0.8rem;color:${c.textMuted};">${isEs ? 'Imp.' : 'Imp.'} ${lbl(im)}</th>`).join('')}</tr>`;
-    const bodyRows = order.map(lk => `
-        <tr>
-            <th style="padding:0.5rem;font-size:0.8rem;color:${c.textMuted};text-align:right;white-space:nowrap;">${isEs ? 'Prob.' : 'Lk.'} ${lbl(lk)}</th>
-            ${order.map(im => {
-                const n = cells[lk][im];
-                const bg = n > 0 ? cellColor(lk, im) : 'transparent';
-                return `<td style="padding:0;width:64px;height:48px;text-align:center;border:1px solid ${c.border};background:${bg};color:#fff;font-weight:800;font-size:1.1rem;">${n > 0 ? n : ''}</td>`;
-            }).join('')}
-        </tr>`).join('');
+    const severityOrderKeys = ['crit', 'high', 'med', 'low', 'info'];
+    const severityCounts = { crit: 0, high: 0, med: 0, low: 0, info: 0 };
+    findingsSrc.forEach(f => { severityCounts[safeSeverity(f.severity)]++; });
+    const totalFindings = findingsSrc.length;
+    const severityBreakdown = severityOrderKeys.map(k => ({
+        key: k,
+        label: t.severityLevels[k],
+        count: severityCounts[k],
+        percent: totalFindings ? Math.round((severityCounts[k] / totalFindings) * 1000) / 10 : 0
+    }));
 
-    return `
-        <div style="margin: 2rem 0; page-break-inside: avoid;">
-            <h3 style="font-size:1.15rem;color:${c.textHeading};margin:0 0 1rem;font-weight:800;">${isEs ? 'Matriz de Riesgo (Probabilidad × Impacto)' : 'Risk Matrix (Likelihood × Impact)'}</h3>
-            <table style="border-collapse:collapse;margin:0 auto;">
-                ${headerRow}
-                ${bodyRows}
-            </table>
-        </div>`;
+    // Matriz de riesgo Probabilidad x Impacto (sólo cuenta hallazgos con el
+    // metadato de riesgo activado; si falta probabilidad/impacto, se infiere
+    // de la severidad).
+    const sevToRisk = { crit: ['high', 'high'], high: ['high', 'med'], med: ['med', 'med'], low: ['low', 'med'], info: ['low', 'low'] };
+    const riskOrder = ['high', 'med', 'low'];
+    const cellCounts = {};
+    riskOrder.forEach(lk => riskOrder.forEach(im => { cellCounts[lk + '_' + im] = 0; }));
+    let riskMatrixHasData = false;
+    findingsSrc.forEach(f => {
+        if (!getFindingFieldVis(f, 'risk')) return;
+        let lk = f.likelihood, im = f.impactRating || f.impact_rating;
+        if (!lk || !im) {
+            const dd = sevToRisk[safeSeverity(f.severity)] || ['med', 'med'];
+            lk = lk || dd[0]; im = im || dd[1];
+        }
+        const key = lk + '_' + im;
+        if (cellCounts[key] !== undefined) { cellCounts[key]++; riskMatrixHasData = true; }
+    });
+    const weight = { high: 3, med: 2, low: 1 };
+    const riskMatrixRows = riskOrder.map(lk => ({
+        likelihood: lk,
+        likelihood_label: riskLbl(lk),
+        cells: riskOrder.map(im => {
+            const score = weight[lk] * weight[im];
+            return {
+                impact: im,
+                impact_label: riskLbl(im),
+                count: cellCounts[lk + '_' + im],
+                level: score >= 9 ? 'critical' : score >= 6 ? 'high' : score >= 3 ? 'medium' : 'low'
+            };
+        })
+    }));
+
+    // Alcance y metodología
+    const scopeVis = scopeSectionVisibleFields(d);
+    const standards = METHODOLOGY_STANDARDS.filter(s => (d.methodologyStandards || []).includes(s.key));
+
+    const findings = findingsSrc.map((f, idx) => {
+        const sev = safeSeverity(f.severity);
+        const likelihood = f.likelihood || '';
+        const impactRating = f.impactRating || f.impact_rating || '';
+        const retestNotes = f.retestNotes || f.retest_notes || '';
+        return {
+            index: idx,
+            index1: idx + 1,
+            code: 'F-' + String(idx + 1).padStart(2, '0'),
+            title: f.title || '',
+            severity: sev,
+            severity_label: t.severityLevels[sev],
+            cvss: f.cvss || '',
+            cvss_vector: f.cvssVector || f.cvss_vector || '',
+            cve: f.cve || '',
+            cwe: f.cwe || '',
+            reference: f.reference || '',
+            references: Array.isArray(f.references) ? f.references : [],
+            description: f.description || '',
+            description_html: markdownToHtml(f.description || ''),
+            poc: f.poc || '',
+            poc_html: markdownToHtml(f.poc || ''),
+            exploit: f.exploit || '',
+            impact: f.impact || '',
+            impact_html: markdownToHtml(f.impact || ''),
+            remediation: f.remediation || '',
+            remediation_html: markdownToHtml(f.remediation || ''),
+            images: Array.isArray(f.images) ? f.images : [],
+            image_captions: Array.isArray(f.imageCaptions || f.image_captions) ? (f.imageCaptions || f.image_captions) : [],
+            status: f.status || 'open',
+            status_label: (t.findingStatuses || {})[f.status || 'open'] || f.status || '',
+            affected_assets: f.affectedAssets || f.affected_assets || '',
+            likelihood,
+            likelihood_label: likelihood ? riskLbl(likelihood) : '',
+            impact_rating: impactRating,
+            impact_rating_label: impactRating ? riskLbl(impactRating) : '',
+            risk_visible: getFindingFieldVis(f, 'risk'),
+            owasp: f.owasp || '',
+            owasp_visible: getFindingFieldVis(f, 'owasp'),
+            compliance: Array.isArray(f.compliance) ? f.compliance : [],
+            compliance_visible: getFindingFieldVis(f, 'compliance'),
+            retest_notes: retestNotes,
+            retest_notes_html: markdownToHtml(retestNotes),
+            retest_visible: getFindingFieldVis(f, 'retest')
+        };
+    });
+
+    return {
+        lang: state.lang,
+        document_title: d.documentTitle || '',
+        client_company: d.clientCompany || '',
+        client_logo: Array.isArray(d.clientLogo) ? d.clientLogo.filter(Boolean) : [],
+        target_asset: d.targetAsset || '',
+        auditor_company: d.auditorCompany || '',
+        auditor_name: d.auditorName || '',
+        auditor_phone: d.auditorPhone || d.auditor_phone || '',
+        auditor_email: d.auditorEmail || d.auditor_email || '',
+        classification: d.classification || '2',
+        classification_label: classLabels[d.classification] || classLabels['2'],
+        version: d.version || '',
+        date: d.date || '',
+        audit_type: d.auditType || '',
+        audit_type_label: (t.auditTypes || {})[d.auditType] || d.auditType || '',
+
+        has_incidents: !!d.hasIncidents,
+        incidents_text: d.incidentsText || '',
+        incidents_html: markdownToHtml(d.incidentsText || ''),
+
+        audit_summary: d.auditSummary || '',
+        audit_summary_html: markdownToHtml(d.auditSummary || ''),
+        tests_performed: d.testsPerformed || '',
+        tests_performed_html: markdownToHtml(d.testsPerformed || ''),
+        recommended_solutions: d.recommendedSolutions || '',
+        recommended_solutions_html: markdownToHtml(d.recommendedSolutions || ''),
+
+        scope: {
+            show: scopeSectionHasContent(d),
+            show_dates: scopeVis.showDates,
+            engagement_start: d.engagementStart || '',
+            engagement_end: d.engagementEnd || '',
+            show_scope_in: scopeVis.showScopeIn,
+            scope_in: d.scopeIn || '',
+            show_scope_out: scopeVis.showScopeOut,
+            scope_out: d.scopeOut || '',
+            show_standards: scopeVis.showStd,
+            standards,
+            show_notes: scopeVis.showNotes,
+            methodology_notes: d.methodologyNotes || '',
+            methodology_notes_html: markdownToHtml(d.methodologyNotes || ''),
+            show_tools: scopeVis.showTools,
+            tools_used: d.toolsUsed || ''
+        },
+
+        revision_history: (d.revisionHistory || [])
+            .filter(r => r.version || r.date || r.author || r.changes)
+            .map(r => ({
+                version: r.version || '', date: r.date || '', author: r.author || '',
+                changes: r.changes || '', changes_html: markdownToHtml(r.changes || '')
+            })),
+
+        findings_count: totalFindings,
+        severity_counts: severityCounts,
+        severity_breakdown: severityBreakdown,
+        show_severity_bars: showBars,
+
+        risk_matrix_rows: riskMatrixRows,
+        risk_matrix_has_data: riskMatrixHasData,
+
+        findings
+    };
 }
 
-// Tabla de control de versiones del documento.
-function renderRevisionHistoryPreview(c, t) {
+// Contexto de EJEMPLO para que el editor de temas tenga algo que previsualizar
+// sin depender de un reporte real abierto.
+function buildSampleReportContext() {
     const isEs = state.lang === 'es';
-    const rows = (state.auditData.revisionHistory || []).filter(r => r.version || r.date || r.author || r.changes);
-    if (!rows.length) return '';
-    return `
-        <div id="revisions" style="padding: 2rem 0; page-break-inside: avoid; background: ${c.pageBg};">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 2px solid ${c.border}; padding-bottom: 0.75rem; margin-bottom: 1.5rem;">
-                <h2 style="font-size: 1.75rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${isEs ? 'Control de Versiones' : 'Document Control'}</h2>
-                ${renderTlpPageBadge(state.auditData)}
-            </div>
-            <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
-                <thead>
-                    <tr style="text-align:left;">
-                        <th style="padding:0.6rem 0.8rem;border-bottom:2px solid ${c.border};color:${c.textMuted};">${isEs ? 'Versión' : 'Version'}</th>
-                        <th style="padding:0.6rem 0.8rem;border-bottom:2px solid ${c.border};color:${c.textMuted};">${isEs ? 'Fecha' : 'Date'}</th>
-                        <th style="padding:0.6rem 0.8rem;border-bottom:2px solid ${c.border};color:${c.textMuted};">${isEs ? 'Autor' : 'Author'}</th>
-                        <th style="padding:0.6rem 0.8rem;border-bottom:2px solid ${c.border};color:${c.textMuted};">${isEs ? 'Cambios' : 'Changes'}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rows.map(r => `
-                        <tr>
-                            <td style="padding:0.6rem 0.8rem;border-bottom:1px solid ${c.borderFaint};color:${c.textBody};font-weight:700;">${escapeHTML(r.version || '')}</td>
-                            <td style="padding:0.6rem 0.8rem;border-bottom:1px solid ${c.borderFaint};color:${c.textBody};">${escapeHTML(r.date || '')}</td>
-                            <td style="padding:0.6rem 0.8rem;border-bottom:1px solid ${c.borderFaint};color:${c.textBody};">${escapeHTML(r.author || '')}</td>
-                            <td style="padding:0.6rem 0.8rem;border-bottom:1px solid ${c.borderFaint};color:${c.textBody};">${escapeHTML(r.changes || '')}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>`;
+    const today = new Date().toISOString().split('T')[0];
+    const sampleFindings = [
+        {
+            title: isEs ? 'Inyección SQL en el formulario de login' : 'SQL Injection in the login form',
+            severity: 'crit', cvss: '9.8', cwe: 'CWE-89',
+            description: isEs
+                ? 'El parámetro `usuario` no sanea la entrada antes de construir la consulta SQL, permitiendo un bypass de autenticación.'
+                : 'The `user` parameter is not sanitized before building the SQL query, allowing an authentication bypass.',
+            poc: '```\n\' OR \'1\'=\'1\n```',
+            impact: isEs ? 'Un atacante no autenticado puede acceder a cualquier cuenta de la plataforma.' : 'An unauthenticated attacker can access any account on the platform.',
+            remediation: isEs ? 'Usar siempre consultas parametrizadas (prepared statements).' : 'Always use parameterized queries (prepared statements).',
+            images: [], likelihood: 'high', impactRating: 'high', owasp: 'A03:2021',
+            fieldsVisibility: { risk: true, owasp: true }
+        },
+        {
+            title: isEs ? 'Cabeceras de seguridad ausentes' : 'Missing security headers',
+            severity: 'med', cvss: '5.3', cwe: 'CWE-693',
+            description: isEs
+                ? 'La aplicación no envía `Content-Security-Policy` ni `X-Frame-Options`.'
+                : 'The application does not send `Content-Security-Policy` or `X-Frame-Options`.',
+            impact: isEs ? 'Aumenta la superficie de ataque frente a XSS y clickjacking.' : 'Increases the attack surface for XSS and clickjacking.',
+            remediation: isEs ? 'Añadir las cabeceras recomendadas por OWASP Secure Headers.' : 'Add the headers recommended by OWASP Secure Headers.',
+            images: [], likelihood: 'med', impactRating: 'med',
+            fieldsVisibility: { risk: true }
+        },
+        {
+            title: isEs ? 'Versión de servidor desactualizada' : 'Outdated server version',
+            severity: 'low', cvss: '3.1',
+            description: isEs
+                ? 'El servidor expone una versión de nginx con vulnerabilidades públicas de baja severidad.'
+                : 'The server exposes an nginx version with publicly known low-severity vulnerabilities.',
+            remediation: isEs ? 'Actualizar a la última versión estable.' : 'Update to the latest stable version.',
+            images: [], likelihood: 'low', impactRating: 'low',
+            fieldsVisibility: { risk: true }
+        }
+    ];
+    const sampleAuditData = {
+        documentTitle: isEs ? 'Informe de Pentesting — Demo' : 'Pentesting Report — Demo',
+        clientCompany: isEs ? 'Empresa Cliente Demo S.A.' : 'Demo Client Company Inc.',
+        clientLogo: ['', ''],
+        targetAsset: 'https://demo.example.com',
+        auditorCompany: 'Pwnly Security Lab',
+        auditorName: isEs ? 'Equipo de Auditoría' : 'Audit Team',
+        classification: '2',
+        version: '1.0',
+        date: today,
+        auditType: 'pentesting_web',
+        hasIncidents: false,
+        incidentsText: '',
+        auditSummary: isEs
+            ? 'Durante la auditoría se identificaron 3 hallazgos (1 crítico, 1 medio, 1 bajo). El hallazgo crítico permite un bypass de autenticación completo y debe remediarse con prioridad máxima.'
+            : 'During the audit, 3 findings were identified (1 critical, 1 medium, 1 low). The critical finding allows a full authentication bypass and must be remediated with top priority.',
+        testsPerformed: '',
+        recommendedSolutions: '',
+        scopeIn: 'https://demo.example.com\n192.168.1.0/24',
+        scopeOut: isEs ? 'Infraestructura de terceros' : 'Third-party infrastructure',
+        methodologyNotes: '',
+        methodologyStandards: ['owasp_wstg', 'ptes'],
+        toolsUsed: 'Burp Suite, nmap, sqlmap',
+        engagementStart: today,
+        engagementEnd: today,
+        revisionHistory: [{ version: '1.0', date: today, author: isEs ? 'Equipo de Auditoría' : 'Audit Team', changes: isEs ? 'Versión inicial' : 'Initial version' }],
+        scopeFieldsVisibility: { scopeIn: true, scopeOut: true, standards: true, toolsUsed: true }
+    };
+    return buildReportContext(sampleAuditData, sampleFindings, true);
 }
 
+// --------------------------------------------------------------------------- //
+// Renderizado del informe: compila la plantilla HTML del tema activo contra
+// buildReportContext() con el motor de ThemeEngine. Sin tema activo, se
+// muestra un estado vacío invitando a crear uno en "Temas".
+// --------------------------------------------------------------------------- //
 function renderPreview() {
     if (state.activeTab !== 'preview' || state.showSplash || state.showReportSelector) return '';
-
-    const t = UI[state.lang];
-    const d = state.auditData;
-    const c   = getThemeColors();
-    const dk  = state.reportTheme === 'dark';
-    const htb = state.reportTheme === 'htb';
-    const rt  = state.reportTheme === 'redteam';
-
+    const isEs = state.lang === 'es';
     const _cw = state.pdfContentWidth || 820;
-    return `
-        <div class="preview-container" data-rt-theme="${escapeHTML(state.reportTheme)}" style="max-width:${_cw}px;">
-            <!-- PORTADA -->
-            <div class="cover-page" style="
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                gap: 2rem;
-                min-height: 100vh;
-                page-break-after: always;
-                page-break-inside: avoid;
-                background: ${c.pageBg};
-                color: ${c.textHeading};
-                padding: 0 3rem 0.25rem 3rem;
-            ">
+    const theme = getActiveTheme();
 
-                <!-- PARTE SUPERIOR Y MEDIA CENTRALIZADA -->
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center;">
-
-                    <div style="margin-bottom: 1rem; width: 100%; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-                        ${d.clientLogo[0] || d.clientLogo[1] ? `
-                            ${d.clientLogo[0] ? `
-                                <img src="${escapeHTML(d.clientLogo[0])}" alt="${t.logoClient} 1" style="max-height: 200px; width: auto; max-width: 45%; object-fit: contain; display: block; filter: drop-shadow(0 10px 25px rgba(0,0,0,0.08));">
-                            ` : ''}
-                            ${d.clientLogo[1] ? `
-                                <img src="${escapeHTML(d.clientLogo[1])}" alt="${t.logoClient} 2" style="max-height: 200px; width: auto; max-width: 45%; object-fit: contain; display: block; filter: drop-shadow(0 10px 25px rgba(0,0,0,0.08));">
-                            ` : ''}
-                        ` : htb ? `
-                            <div style="display:flex;flex-direction:column;align-items:center;gap:1.25rem;">
-                                <div style="display:flex;align-items:center;gap:1.25rem;">
-                                    <svg width="72" height="82" viewBox="0 0 72 82" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <polygon points="36,3 69,21 69,57 36,75 3,57 3,21" fill="none" stroke="#9fef00" stroke-width="3.5" stroke-linejoin="round"/>
-                                        <polygon points="36,3 69,21 36,39 3,21" fill="#9fef00" fill-opacity="0.18" stroke="#9fef00" stroke-width="2.5" stroke-linejoin="round"/>
-                                        <polygon points="3,21 36,39 36,75 3,57" fill="#9fef00" fill-opacity="0.28" stroke="#9fef00" stroke-width="2.5" stroke-linejoin="round"/>
-                                        <polygon points="69,21 36,39 36,75 69,57" fill="#9fef00" fill-opacity="0.10" stroke="#9fef00" stroke-width="2.5" stroke-linejoin="round"/>
-                                        <line x1="36" y1="39" x2="36" y2="75" stroke="#9fef00" stroke-width="2.5"/>
-                                    </svg>
-                                    <div style="font-size:2.6rem;font-weight:900;letter-spacing:0.04em;color:#ffffff;line-height:1;">
-                                        <span style="color:#9fef00;">HACK</span>THE<span style="color:#9fef00;">BOX</span>
-                                    </div>
-                                </div>
-                            </div>
-                        ` : rt ? `
-                            <div style="display:flex;flex-direction:column;align-items:center;gap:1.75rem;">
-                                <div style="width:132px; height:132px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.35); box-shadow:0 0 70px rgba(239,68,68,0.22), inset 0 0 36px rgba(239,68,68,0.06);">
-                                    <svg width="68" height="68" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><line x1="12" y1="1.5" x2="12" y2="5.5"/><line x1="12" y1="18.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="5.5" y2="12"/><line x1="18.5" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="1.6" fill="#f87171" stroke="none"/></svg>
-                                </div>
-                                <div style="font-size:0.95rem;font-weight:600;letter-spacing:0.45em;color:#f87171;text-transform:uppercase;padding-left:0.45em;">Red Team</div>
-                            </div>
-                        ` : `
-                            <div style="width:160px; height:160px; background:#2563eb; border-radius:32px; display:flex; align-items:center; justify-content:center; box-shadow:0 15px 40px rgba(37,99,235,0.3);">
-                                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-                            </div>
-                        `}
-                    </div>
-
-                    <!-- TÍTULO + RED TEAM INFO -->
-                    <div style="display:flex; flex-direction:column; align-items:center; text-align:center;">
-                        <h1 style="font-size: 3.5rem; font-weight: 900; letter-spacing: -0.04em; margin: 0 0 1.25rem; color: ${c.textPrimary}; line-height:1.1; max-width: 800px;">
-                            ${escapeHTML(d.documentTitle)}
-                        </h1>
-
-                        <div style="width: 80px; height: 5px; background: ${c.accentBar}; border-radius: 6px; margin-bottom: 1.5rem; box-shadow: ${htb ? '0 4px 14px rgba(159,239,0,0.4)' : rt ? '0 4px 14px rgba(239,68,68,0.4)' : '0 4px 10px rgba(37,99,235,0.3)'};"></div>
-
-                        <p style="font-size: 1.35rem; color: ${c.coverAccent}; font-weight: 600; margin:0; letter-spacing: -0.01em;">
-                            ${escapeHTML(d.targetAsset)}
-                        </p>
-
-                        ${(() => {
-                    // TLP eliminado: la portada solo muestra la etiqueta de Clasificación.
-                    // Se coloca justo bajo el título/target para que no quede un gran
-                    // hueco vertical entre ambos (el bloque superior lleva flex:1).
-                    const classLabels = { '1': 'Público', '2': 'Interno', '3': 'Confidencial', '4': 'Restringido' };
-                    const classLabel = classLabels[d.classification] || 'Interno';
-                    return `
-                        <div style="margin-top: 1.25rem; display: flex; justify-content: center; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                            <span style="display:inline-flex; align-items:center; gap:0.4rem; background:${c.classifBg}; border:1px solid ${c.classifBorder}; border-radius:6px; padding:0.4rem 1rem; font-size:0.75rem; font-weight:700; color:${c.classifText}; text-transform:uppercase; letter-spacing:0.08em;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                ${escapeHTML(classLabel)}
-                            </span>
-                        </div>`;
-                })()}
-                    </div>
+    if (!theme) {
+        return `
+            <div class="preview-container preview-empty" style="max-width:${_cw}px;">
+                <div class="empty-state">
+                    <p>${isEs ? 'Todavía no tienes ningún tema creado.' : "You don't have any theme yet."}</p>
+                    <p class="text-muted">${isEs
+                        ? 'Ve a "Temas" para crear el tuyo (HTML + CSS) y poder generar el informe.'
+                        : 'Go to "Themes" to create yours (HTML + CSS) so you can generate the report.'}</p>
+                    <button class="btn-primary" onclick="hideReports(); showThemesPage();">${isEs ? 'Ir a Temas' : 'Go to Themes'}</button>
                 </div>
+            </div>`;
+    }
 
-                <div style="margin-top: 0; background: ${c.metaBg}; border: 1px solid ${c.borderMeta}; border-radius: 12px; padding: 1.5rem 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <div style="display: flex; gap: 0;">
-                        <div style="flex: 1; padding: 0 1rem; border-right: 1px solid ${c.borderMetaSub};">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c.textGrayMed}" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
-                                <span style="font-size:0.6rem; font-weight:700; color:${c.textGrayMed}; text-transform:uppercase; letter-spacing:0.1em;">${t.clientCompany}</span>
-                            </div>
-                            <p style="font-size:0.95rem; font-weight:700; color:${c.textPrimary}; margin:0; line-height:1.4;">${escapeHTML(d.clientCompany)}</p>
-                        </div>
-                        <div style="flex: 1; padding: 0 1rem; border-right: 1px solid ${c.borderMetaSub};">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c.textGrayMed}" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                <span style="font-size:0.6rem; font-weight:700; color:${c.textGrayMed}; text-transform:uppercase; letter-spacing:0.1em;">${t.auditorCompany}</span>
-                            </div>
-                            <p style="font-size:0.95rem; font-weight:700; color:${c.textPrimary}; margin:0; line-height:1.4;">${escapeHTML(d.auditorCompany)}</p>
-                            <p style="font-size:0.8rem; font-weight:500; color:${c.textGrayMed}; margin:0.25rem 0 0 0;">${escapeHTML(d.auditorName)}</p>
-                        </div>
-                        <div style="flex: 1; padding: 0 1rem; border-right: 1px solid ${c.borderMetaSub};">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c.textGrayMed}" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                <span style="font-size:0.6rem; font-weight:700; color:${c.textGrayMed}; text-transform:uppercase; letter-spacing:0.1em;">${t.date}</span>
-                            </div>
-                            <p style="font-size:0.95rem; font-weight:700; color:${c.textPrimary}; margin:0;">${escapeHTML(d.date)}</p>
-                        </div>
-                        <div style="flex: 0.7; padding: 0 1rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c.textGrayMed}" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                                <span style="font-size:0.6rem; font-weight:700; color:${c.textGrayMed}; text-transform:uppercase; letter-spacing:0.1em;">${t.version}</span>
-                            </div>
-                            <p style="font-size:1.1rem; font-weight:800; color:${c.versionColor}; margin:0;">${escapeHTML(d.version)}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- ÍNDICE -->
-            <div class="index-page" style="padding: 4rem 2rem; min-height: 100vh; page-break-after: always; max-width: 900px; margin: 0 auto; background: ${c.pageBg};">
-                <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 2px solid ${c.border}; padding-bottom: 1rem; margin-bottom: 2.5rem;">
-                    <h2 style="font-size: 2.25rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${t.index}</h2>
-                    ${renderTlpPageBadge(d)}
-                </div>
+    const ctx = buildReportContext();
+    let bodyHtml;
+    try {
+        bodyHtml = ThemeEngine.render(theme.html_template || '', ctx);
+    } catch (e) {
+        bodyHtml = `<pre style="color:#dc2626;white-space:pre-wrap;padding:1.5rem;font-family:ui-monospace,monospace;">${escapeHTML((isEs ? 'Error en la plantilla del tema: ' : 'Theme template error: ') + e.message)}</pre>`;
+    }
 
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    <a href="#summary" style="display: flex; justify-content: space-between; text-decoration: none; color: ${c.textMuted}; font-weight: 700; padding: 0.75rem 0; border-bottom: 1px dotted ${c.borderLight}; font-size: 1.125rem; transition: color 0.2s;">
-                        <span>${t.executiveSummaryWithCVSS}</span>
-                    </a>
-                    ${scopeSectionHasContent(d) ? `
-                    <a href="#scope" style="display: flex; justify-content: space-between; text-decoration: none; color: ${c.textMuted}; font-weight: 700; padding: 0.75rem 0; border-bottom: 1px dotted ${c.borderLight}; font-size: 1.125rem; transition: color 0.2s;">
-                        <span>${state.lang === 'es' ? 'Alcance y Metodología' : 'Scope & Methodology'}</span>
-                    </a>` : ''}
-                    <a href="#incidents" style="display: flex; justify-content: space-between; text-decoration: none; color: ${c.textMuted}; font-weight: 700; padding: 0.75rem 0; border-bottom: 1px dotted ${c.borderLight}; font-size: 1.125rem; transition: color 0.2s;">
-                        <span>${t.incidentsSectionTitle}</span>
-                    </a>
-
-                    ${state.findings.length > 0 ? `<h3 style="margin-top: 2rem; margin-bottom: 1rem; color: ${c.textFaint}; font-size: 1.5rem; font-weight: 700;">${t.technicalFindings}</h3>` : ''}
-
-                    ${state.findings.map((f, idx) => `
-                        <a href="#finding-${idx}" style="display: flex; justify-content: space-between; text-decoration: none; color: ${c.textHeading}; padding: 0.75rem 0; border-bottom: 1px dotted ${c.borderLight}; align-items: center; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor=state.reportTheme==='dark'?'#1e293b':'#f9fafb'" onmouseout="this.style.backgroundColor='transparent'">
-                            <div style="padding-right: 1rem;">
-                                <span style="display: inline-block; width: 2rem; font-weight: 700; color: ${c.textGray};">${idx + 1}.</span>
-                                <span style="font-weight: 500;">${escapeHTML(f.title)}</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 0.25rem 0.5rem; border-radius: 6px; background-color: var(--severity-${safeSeverity(f.severity)}); color: white; min-width: 80px; text-align: center; display: inline-block;">
-                                    ${t.severityLevels[safeSeverity(f.severity)]}
-                                </span>
-                                <span style="font-weight: 700; color: ${c.textGray}; font-size: 0.875rem; width: 40px; text-align: right;">${escapeHTML(f.cvss || '-')}</span>
-                            </div>
-                        </a>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <!-- ALCANCE Y METODOLOGÍA -->
-            ${renderScopeMethodologyPreview(c, t)}
-
-            <!-- RESUMEN EJECUTIVO + INCIDENCIAS -->
-            <!-- Sin page-break-inside: avoid en el contenedor: es demasiado alto
-                 (resumen CVSS + matriz de riesgo + incidencias) y, si no cabe en
-                 el hueco restante, saltaba entero dejando media página en blanco.
-                 Cada sub-bloque (resumen CVSS, matriz) ya evita partirse por su
-                 cuenta, así que el conjunto puede fluir y llenar la página. -->
-            <div style="padding: 2rem 0; background: ${c.pageBg};">
-                <div id="summary" style="margin-bottom: 3rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 2px solid ${c.border}; padding-bottom: 0.75rem; margin-bottom: 1.5rem;">
-                        <h2 style="font-size: 1.75rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${t.executiveSummary}</h2>
-                        ${renderTlpPageBadge(d)}
-                    </div>
-                    ${renderCvssSummary()}
-                    ${renderRiskMatrix(c, t)}
-                </div>
-
-                <div id="incidents">
-                    <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 2px solid ${c.border}; padding-bottom: 0.75rem; margin-bottom: 1rem;">
-                        <h2 style="font-size: 1.75rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${t.incidentsSectionTitle}</h2>
-                        ${renderTlpPageBadge(d)}
-                    </div>
-                ${d.hasIncidents ? `
-                    <div style="background:${c.orangeBg}; border:1px solid ${c.borderOrange}; border-left:6px solid #f97316; border-radius:10px; padding:1.5rem 2rem;">
-                        <p style="font-weight:700; color:${c.textOrange}; margin-bottom:0.75rem; font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                            ${t.incidentsRecorded}
-                        </p>
-                        <div style="color:${c.textOrangeDark}; line-height:1.7; text-align: justify;">${markdownToHtml(d.incidentsText || '')}</div>
-                    </div>
-                ` : `
-                    <div style="background:${c.greenBg}; border:1px solid ${c.borderGreen}; border-left:6px solid #22c55e; border-radius:10px; padding:1.5rem 2rem; display:flex; align-items:center; gap:1rem;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                        <p style="color:${c.textGreen}; font-weight:600; font-size:1.05rem; margin:0;">${t.incidentsNoneText}</p>
-                    </div>
-                `}
-            </div>
-
-            <!-- HALLAZGOS TÉCNICOS -->
-            <div class="findings-preview" style="background: ${c.pageBg};">
-                ${state.findings.map((f, idx) => `
-                    <div id="finding-${idx}" class="finding-preview severity-${safeSeverity(f.severity)}" style="margin-bottom: 3rem; background: ${c.cardBg}; padding: 2rem; border-radius: 12px; border: 1px solid ${c.border}; ${state.pdfShowSeverityBars ? `border-left: 6px solid var(--severity-${safeSeverity(f.severity)});` : ''} box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid ${c.border}; padding-bottom: 1rem; page-break-after: avoid;">
-                            <div style="min-width:0;">
-                                <span style="display:inline-block;font-family:ui-monospace,monospace;font-size:0.7rem;font-weight:700;color:${c.textGray};border:1px solid ${c.border};border-radius:5px;padding:0.1rem 0.45rem;margin-bottom:0.4rem;">${findingCode(idx)}</span>
-                                <h3 style="font-size: 1.5rem; font-weight: 800; color: ${c.textHeading}; margin: 0;">${idx + 1}. ${escapeHTML(f.title)}</h3>
-                            </div>
-                            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.4rem;margin-left:1rem;">
-                                <div style="background-color: var(--severity-${safeSeverity(f.severity)}); color: white; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 700; font-size: 0.875rem; text-transform: uppercase; white-space: nowrap;">
-                                    ${t.severityLevels[safeSeverity(f.severity)]}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-                            <div style="background: ${c.cardBg}; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid ${c.border};">
-                                <p style="font-size: 0.75rem; font-weight: 700; color: ${c.textGray}; text-transform: uppercase; margin-bottom: 0.25rem;">${t.cvssScore}</p>
-                                <p style="font-size: 1.25rem; font-weight: 800; color: ${c.textHeading}; margin: 0;">${escapeHTML(f.cvss || t.na)}</p>
-                            </div>
-                            <div style="background: ${c.cardBg}; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid ${c.border};">
-                                <p style="font-size: 0.75rem; font-weight: 700; color: ${c.textGray}; text-transform: uppercase; margin-bottom: 0.25rem;">${t.cveId}</p>
-                                <p style="font-size: 1.25rem; font-weight: 800; color: ${c.textHeading}; margin: 0;">${escapeHTML(f.cve || t.na)}</p>
-                            </div>
-                            <div style="background: ${c.cardBg}; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid ${c.border};">
-                                <p style="font-size: 0.75rem; font-weight: 700; color: ${c.textGray}; text-transform: uppercase; margin-bottom: 0.25rem;">${t.cweId}</p>
-                                <p style="font-size: 1.25rem; font-weight: 800; color: ${c.textHeading}; margin: 0;">${f.cwe ? `<a href="https://cwe.mitre.org/data/definitions/${escapeHTML(String(f.cwe).replace(/[^0-9]/g,''))}.html" target="_blank" style="color:${c.textHeading}; text-decoration:none;">${escapeHTML(f.cwe)}</a>` : t.na}</p>
-                            </div>
-                            <div style="background: ${c.cardBg}; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid ${c.border};">
-                                <p style="font-size: 0.75rem; font-weight: 700; color: ${c.textGray}; text-transform: uppercase; margin-bottom: 0.25rem;">${t.referenceUrl}</p>
-                                <p style="font-size: 0.875rem; font-weight: 500; color: #3b82f6; margin: 0; word-break: break-all;">${f.reference ? `<a href="${escapeHTML(f.reference)}" target="_blank" style="color: #3b82f6; text-decoration: none;">${escapeHTML(f.reference)}</a>` : t.na}</p>
-                            </div>
-                        </div>
-
-                        ${renderFindingProMeta(f, c, t)}
-
-                        ${f.description ? `
-                            <div style="margin-bottom: 1.5rem;">
-                                <h4 style="font-size: 1.125rem; font-weight: 700; color: ${c.textMuted}; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                                    ${t.description}
-                                </h4>
-                                <div style="color: ${c.textFaint}; line-height: 1.65; word-wrap: break-word; text-align: justify;">${markdownToHtml(f.description)}</div>
-                            </div>
-                        ` : ''}
-
-                        ${f.poc ? `
-                            <div style="margin-bottom: 1.5rem; background: ${c.pocBg}; color: ${c.pocText}; padding: 1.5rem; border-radius: 8px; border: 1px solid ${c.pocBorder}; overflow: hidden; max-width: 100%; break-inside: avoid;">
-                                <h4 style="font-size: 1.125rem; font-weight: 700; color: ${c.pocHeading}; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${c.pocHeading}" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                                    ${t.pocSteps}
-                                </h4>
-                                <div style="font-size: 0.88rem; line-height: 1.7; color: ${c.pocText}; text-align: left; word-break: break-word; max-width: 100%;">${markdownToHtml(f.poc)}</div>
-                            </div>
-                        ` : ''}
-
-                        ${f.exploit ? `
-                            <div style="margin-bottom: 1.5rem; background: ${c.pocBg}; color: ${c.pocText}; border-radius: 8px; border: 1px solid ${c.pocBorder}; overflow: hidden; max-width: 100%; break-inside: avoid;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.2rem; border-bottom: 1px solid ${c.pocBorder};">
-                                    <span style="width: 11px; height: 11px; border-radius: 50%; background: #ff5f56; display: inline-block;"></span>
-                                    <span style="width: 11px; height: 11px; border-radius: 50%; background: #ffbd2e; display: inline-block;"></span>
-                                    <span style="width: 11px; height: 11px; border-radius: 50%; background: #27c93f; display: inline-block;"></span>
-                                    <span style="margin-left: 0.5rem; font-size: 0.78rem; font-weight: 700; color: ${c.pocHeading}; display: inline-flex; align-items: center; gap: 0.4rem;">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${c.pocHeading}" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                                        ${t.exploitCode}
-                                    </span>
-                                </div>
-                                <pre style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; line-height: 1.6; font-size: 0.82rem; color: ${c.pocText}; margin: 0; padding: 1rem 1.2rem; tab-size: 4; -moz-tab-size: 4; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%;">${escapeHTML(f.exploit)}</pre>
-                            </div>
-                        ` : ''}
-
-                        ${f.images && f.images.length > 0 ? `
-                            <div style="margin-bottom: 1.5rem;">
-                                <h4 style="font-size: 1.125rem; font-weight: 700; color: ${c.textMuted}; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                    ${t.evidence}
-                                </h4>
-                                <div style="display: grid; grid-template-columns: 1fr; gap: 1.5rem;">
-                                    ${f.images.map((img, imgIdx) => `
-                                        <div style="border: 1px solid ${c.border}; border-radius: 8px; overflow: hidden; break-inside: avoid; background: ${c.pageBg}; padding: 0.5rem;">
-                                            <img src="${escapeHTML(img)}" alt="${t.evidence} ${imgIdx + 1}" style="width: 100%; height: auto; border-radius: 4px; display: block;">
-                                            ${Array.isArray(f.imageCaptions || f.image_captions) && (f.imageCaptions || f.image_captions)[imgIdx] ? `<div style="padding: 0.4rem 0.25rem 0.1rem; font-size: 0.8rem; font-style: italic; color: ${c.textMuted}; text-align: center; line-height: 1.4;">${escapeHTML((f.imageCaptions || f.image_captions)[imgIdx])}</div>` : ''}
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-
-                        ${f.impact ? `
-                            <div style="margin-bottom: 1.5rem;">
-                                <h4 style="font-size: 1.125rem; font-weight: 700; color: ${c.textRed}; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                                    ${t.businessImpact}
-                                </h4>
-                                <div style="color: ${c.textFaint}; line-height: 1.65; word-wrap: break-word; text-align: justify;">${markdownToHtml(f.impact)}</div>
-                            </div>
-                        ` : ''}
-
-                        ${f.remediation ? `
-                            <div style="margin-bottom: 0; background: ${c.greenBg}; padding: 1.5rem; border-radius: 8px; border: 1px solid ${c.borderGreen};">
-                                <h4 style="font-size: 1.125rem; font-weight: 700; color: ${c.textGreen}; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                                    ${t.solutionRemediation}
-                                </h4>
-                                <div style="color: ${c.textGreenDark}; line-height: 1.65; word-wrap: break-word; text-align: justify;">${markdownToHtml(f.remediation)}</div>
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('')}
-            </div>
-
-            <!-- RESUMEN FINAL DE LA AUDITORÍA -->
-            ${d.auditSummary || d.testsPerformed || d.recommendedSolutions ? `
-            <div style="padding: 2rem 0; page-break-before: auto; background: ${c.pageBg};">
-                <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom: 3px solid ${c.accentLine}; padding-bottom: 0.75rem; margin-bottom: 2rem;">
-                    <h2 style="font-size: 2rem; color: ${c.textHeading}; margin: 0; font-weight: 800;">${t.auditConclusions}</h2>
-                    ${renderTlpPageBadge(d)}
-                </div>
-
-                ${d.auditSummary ? `
-                <div id="audit-summary" style="margin-bottom: 2.5rem;">
-                    <h3 style="font-size: 1.5rem; color: ${c.textBody}; margin-bottom: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        ${t.auditSummary}
-                    </h3>
-                    <div style="background: ${c.cardBgAlt}; border: 1px solid ${c.borderMeta}; border-radius: 10px; padding: 1.5rem; line-height: 1.8; color: ${c.textMuted}; text-align: justify;">
-                        ${markdownToHtml(d.auditSummary)}
-                    </div>
-                </div>
-                ` : ''}
-
-                ${d.testsPerformed ? `
-                <div id="tests-performed" style="margin-bottom: 2.5rem;">
-                    <h3 style="font-size: 1.5rem; color: ${c.textBody}; margin-bottom: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
-                        ${t.testsPerformed}
-                    </h3>
-                    <div style="background: ${c.greenBg}; border: 1px solid ${c.borderGreen}; border-radius: 10px; padding: 1.5rem; line-height: 1.8; color: ${c.textMuted}; text-align: justify;">
-                        ${markdownToHtml(d.testsPerformed)}
-                    </div>
-                </div>
-                ` : ''}
-
-                ${d.recommendedSolutions ? `
-                <div id="recommended-solutions">
-                    <h3 style="font-size: 1.5rem; color: ${c.textBody}; margin-bottom: 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
-                        ${t.recommendedSolutions}
-                    </h3>
-                    <div style="background: ${c.purpleBg}; border: 1px solid ${c.borderPurple}; border-radius: 10px; padding: 1.5rem; line-height: 1.8; color: ${c.textMuted}; text-align: justify;">
-                        ${markdownToHtml(d.recommendedSolutions)}
-                    </div>
-                </div>
-                ` : ''}
-            </div>
-            ` : ''}
-
-            <!-- CONTROL DE VERSIONES -->
-            ${renderRevisionHistoryPreview(c, t)}
-        </div>
-    `;
+    return `<div class="preview-container" data-rt-theme="${escapeHTML(theme.slug)}" style="max-width:${_cw}px;">${bodyHtml}</div>`;
 }
 
 
@@ -3183,53 +2797,6 @@ function renderSettingsModal() {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
-
-                <div class="settings-section">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-                        <p class="settings-section-title" style="margin:0;">${isEs ? 'Tema del informe' : 'Report theme'}</p>
-                        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-                            <button class="btn-sm btn-secondary" onclick="openThemeEditor(null)" title="${isEs ? 'Abrir el estudio para crear y personalizar un tema' : 'Open the studio to create and customize a theme'}">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>${isEs ? 'Crear / Personalizar' : 'Create / Customize'}</button>
-                            <button class="btn-sm btn-secondary" onclick="document.getElementById('theme-import-input').click()" title="${isEs ? 'Importar tema (.json o .html)' : 'Import theme (.json or .html)'}">${isEs ? 'Importar' : 'Import'}</button>
-                            <input type="file" id="theme-import-input" accept=".json,application/json,.html,.htm,text/html" style="display:none" onchange="importThemeFile(this)">
-                        </div>
-                    </div>
-                    <div class="theme-card-grid">
-                        ${listAllThemes().map(th => {
-                            const selected = state.reportTheme === th.slug;
-                            const pal = resolveThemePalette(th.slug);
-                            return `
-                            <div class="theme-card ${selected ? 'selected' : ''}" onclick="setReportTheme('${th.slug}')">
-                                <div class="theme-card-swatch" style="background:${pal.pageBg};">
-                                    <span style="background:${pal.accentLine};"></span>
-                                    <span style="background:${pal.cardBg};border:1px solid ${pal.border};"></span>
-                                    <span style="background:${pal.textHeading};"></span>
-                                </div>
-                                <div class="theme-card-name">
-                                    <span>${escapeHTML(th.name)}</span>
-                                    ${selected ? `<svg class="settings-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
-                                </div>
-                                ${!th.builtin ? `
-                                <div class="theme-card-actions" onclick="event.stopPropagation()">
-                                    <button title="${isEs ? 'Editar' : 'Edit'}" onclick="openThemeEditor('${th.slug}')">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                    <button title="${isEs ? 'Exportar' : 'Export'}" onclick="exportTheme('${th.slug}')">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    </button>
-                                    <button title="${isEs ? 'Eliminar' : 'Delete'}" onclick="deleteCustomTheme(${th.id}, '${th.slug}')">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                    </button>
-                                </div>` : `<button title="${isEs ? 'Exportar' : 'Export'}" class="theme-card-export-only" onclick="event.stopPropagation(); exportTheme('${th.slug}')">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                </button>`}
-                            </div>`;
-                        }).join('')}
-                    </div>
-                    ${state.themeManagerSuccess ? `<div class="login-success" style="margin-top:0.6rem;">${escapeHTML(state.themeManagerSuccess)}</div>` : ''}
-                </div>
-
-                <div class="settings-divider"></div>
 
                 <div class="settings-section">
                     <p class="settings-section-title">${isEs ? 'Idioma de la interfaz' : 'Interface language'}</p>
@@ -3338,32 +2905,29 @@ async function loadDemoReport() {
 function renderPdfModal() {
     if (!state.showPdfModal) return '';
     const t = UI[state.lang];
-    const c = getThemeColors();
+    const isEs = state.lang === 'es';
+    // Estilos de la propia ventana del modal (chrome de la app): fijos, no
+    // dependen del tema del informe (cada tema es CSS 100% libre del usuario).
+    const c = { border: '#e5e7eb', cardBg: '#f9fafb', textMuted: '#6b7280', textFaint: '#9ca3af', textHeading: '#111827' };
+    const themes = listAllThemes();
 
-    const sunIcon  = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
-    const moonIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-    const termIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`;
-    const crossIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>`;
-
-    function themeCard(id, label, icon) {
-        const active     = state.pdfPrintTheme === id;
-        const activeBg   = id === 'htb' ? '#9fef00' : id === 'redteam' ? '#ef4444' : '#3b82f6';
-        const activeText = id === 'htb' ? '#1a2332' : '#ffffff';
-        return `<button id="pdf-theme-btn-${id}" onclick="pdfModalSetTheme('${id}')"
-            style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;padding:0.875rem 0.5rem;border-radius:10px;
-                   border:2px solid ${active ? activeBg : c.border};
-                   background:${active ? activeBg : c.cardBg};
-                   color:${active ? activeText : c.textMuted};
-                   cursor:pointer;font-weight:${active ? '700' : '500'};font-size:0.875rem;transition:all 0.15s;">
-            ${icon}${label}
+    function themeCard(th) {
+        const active = state.pdfPrintTheme === th.slug;
+        return `<button id="pdf-theme-btn-${escapeHTML(th.slug)}" onclick="pdfModalSetTheme('${th.slug}')"
+            style="flex:1 1 auto;min-width:110px;padding:0.6rem 0.75rem;border-radius:10px;text-align:left;
+                   border:2px solid ${active ? '#3b82f6' : c.border};
+                   background:${active ? '#3b82f6' : c.cardBg};
+                   color:${active ? '#ffffff' : c.textMuted};
+                   cursor:pointer;font-weight:${active ? '700' : '500'};font-size:0.825rem;transition:all 0.15s;">
+            ${escapeHTML(th.name)}
         </button>`;
     }
 
     const toggleOn  = state.pdfShowSeverityBars;
     const toggleBg  = toggleOn ? '#3b82f6' : c.border;
     const thumbLeft = toggleOn ? '22px' : '2px';
-    const panelBg   = state.reportTheme === 'htb' ? '#04090e' : state.reportTheme === 'dark' ? '#070d18' : state.reportTheme === 'redteam' ? '#140809' : '#dde3ea';
-    const dotMuted  = state.reportTheme !== 'light' ? '#4a5568' : '#b0bec5';
+    const panelBg   = '#dde3ea';
+    const dotMuted  = '#b0bec5';
 
     return `
         <div class="settings-overlay" style="align-items:center;justify-content:center;padding:1rem;" onclick="closePdfModal()">
@@ -3389,12 +2953,13 @@ function renderPdfModal() {
                         <!-- Theme -->
                         <div>
                             <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${c.textMuted};margin-bottom:0.625rem;">${t.pdfModalTheme}</p>
-                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                ${themeCard('light',   t.pdfModalThemeLight,   sunIcon)}
-                                ${themeCard('dark',    t.pdfModalThemeDark,    moonIcon)}
-                                ${themeCard('htb',     t.pdfModalThemeHtb,     termIcon)}
-                                ${themeCard('redteam', t.pdfModalThemeRedteam, crossIcon)}
-                            </div>
+                            ${themes.length === 0 ? `
+                                <p style="font-size:0.8rem;color:${c.textFaint};margin:0;">${isEs ? 'Crea un tema en "Temas" primero.' : 'Create a theme in "Themes" first.'}</p>
+                            ` : `
+                                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                    ${themes.map(themeCard).join('')}
+                                </div>
+                            `}
                         </div>
 
                         <div style="border-top:1px solid ${c.border};"></div>
@@ -3460,7 +3025,11 @@ function renderPdfModal() {
 }
 
 function openPdfModal() {
-    // Usamos las preferencias persistidas en la BD (no reseteamos en cada apertura).
+    // Usamos las preferencias persistidas en la BD (no reseteamos en cada apertura),
+    // salvo que el tema de PDF guardado ya no exista: caemos al tema activo del informe.
+    if (!listAllThemes().some(t => t.slug === state.pdfPrintTheme)) {
+        state.pdfPrintTheme = state.reportTheme;
+    }
     state.showPdfModal = true;
     renderApp();
 }
@@ -3472,16 +3041,14 @@ function closePdfModal() {
 
 function pdfModalSetTheme(theme) {
     state.pdfPrintTheme = theme;
-    const c = getThemeColors();
-    ['light', 'dark', 'htb', 'redteam'].forEach(id => {
-        const btn = document.getElementById('pdf-theme-btn-' + id);
+    const border = '#e5e7eb', cardBg = '#f9fafb', textMuted = '#6b7280';
+    listAllThemes().forEach(th => {
+        const btn = document.getElementById('pdf-theme-btn-' + th.slug);
         if (!btn) return;
-        const isActive   = id === theme;
-        const activeBg   = id === 'htb' ? '#9fef00' : id === 'redteam' ? '#ef4444' : '#3b82f6';
-        const activeText = id === 'htb' ? '#1a2332' : '#ffffff';
-        btn.style.background  = isActive ? activeBg   : c.cardBg;
-        btn.style.borderColor = isActive ? activeBg   : c.border;
-        btn.style.color       = isActive ? activeText : c.textMuted;
+        const isActive = th.slug === theme;
+        btn.style.background  = isActive ? '#3b82f6' : cardBg;
+        btn.style.borderColor = isActive ? '#3b82f6' : border;
+        btn.style.color       = isActive ? '#ffffff' : textMuted;
         btn.style.fontWeight  = isActive ? '700'      : '500';
     });
     persistSettings();
@@ -3490,10 +3057,10 @@ function pdfModalSetTheme(theme) {
 
 function pdfModalSetBars(checked) {
     state.pdfShowSeverityBars = checked;
-    const c     = getThemeColors();
+    const border = '#e5e7eb';
     const bg    = document.getElementById('pdf-toggle-bg');
     const thumb = document.getElementById('pdf-toggle-thumb');
-    if (bg)    bg.style.background = checked ? '#3b82f6' : c.border;
+    if (bg)    bg.style.background = checked ? '#3b82f6' : border;
     if (thumb) thumb.style.left    = checked ? '22px'   : '2px';
     persistSettings();
     updatePdfModalPreview();
@@ -3542,20 +3109,21 @@ function renderPdfPreviewHtml(previewTheme, showBars, contentWidth) {
     state.showSplash         = saved.showSplash;
     state.showReportSelector = saved.showReportSelector;
 
-    const c2   = getThemeColorsFor(previewTheme);
     const ZOOM = 0.42;
 
+    // El fondo real lo pone el CSS propio del tema (ya inyectado globalmente
+    // por injectThemeStyles); aquí sólo evitamos bordes/sombra duplicados en
+    // la miniatura.
     return `
         <style>
             #_pdf_inner .preview-container {
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 margin: 0 auto !important;
-                background: ${c2.pageBg} !important;
             }
         </style>
-        <div data-rt-theme="${escapeHTML(previewTheme)}" style="background:${c2.pageBg};">
-            <div id="_pdf_inner" data-rt-theme="${escapeHTML(previewTheme)}" style="zoom:${ZOOM};background:${c2.pageBg};">
+        <div data-rt-theme="${escapeHTML(previewTheme)}">
+            <div id="_pdf_inner" data-rt-theme="${escapeHTML(previewTheme)}" style="zoom:${ZOOM};">
                 ${html}
             </div>
         </div>`;
@@ -3786,7 +3354,7 @@ async function copyReportSource() {
 // renderizado y su código fuente HTML. La barra es no-print y se omite en modo
 // impresión (PDF / exportación HTML) para no contaminar el documento final.
 function renderPreviewArea() {
-    if (state.activeTab !== 'preview' || state.showSplash || state.showReportSelector) return '';
+    if (state.activeTab !== 'preview' || state.showSplash || state.showReportSelector || state.showThemesPage) return '';
 
     const reportHtml = renderPreview();
 
@@ -3862,6 +3430,7 @@ function renderApp() {
         ${renderNavbar()}
         <main class="main-content">
             ${renderReportsPage()}
+            ${renderThemesPage()}
             ${renderEditor()}
             ${renderPreviewArea()}
         </main>
@@ -3946,7 +3515,7 @@ async function doLogin(event) {
         // tema guardado (la cookie no existía durante el arranque inicial).
         await loadCustomThemes();
         const savedTheme = localStorage.getItem('pwnly_theme');
-        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : 'light';
+        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
         await loadSettings();
         applyThemeAttributes(state.reportTheme);
         // Si se inició sesión directamente en la página de cuenta, cargamos usuarios.
@@ -3985,7 +3554,7 @@ async function doSetup(event) {
         state.setupError = '';
         await loadCustomThemes();
         const savedTheme = localStorage.getItem('pwnly_theme');
-        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : 'light';
+        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
         await loadSettings();
         applyThemeAttributes(state.reportTheme);
         if (state.isAccountView) {
@@ -4408,34 +3977,10 @@ function setLang(lang) {
 
 function setTab(tab) {
     state.activeTab = tab;
+    state.showThemesPage = false;
     renderApp();
 }
 
-
-// Aplica el atributo del tema activo al documento. data-rt-theme controla las
-// variables CSS del informe; data-theme controla el aspecto de la propia
-// interfaz (claro/oscuro) según el tema base.
-function applyThemeAttributes(slug) {
-    const base = themeBaseOf(slug);
-    document.documentElement.setAttribute('data-rt-theme', slug);
-    document.documentElement.removeAttribute('data-theme');
-    // Red Team es un tema oscuro: el cromado del editor reutiliza el modo "dark"
-    // (neutro) y los acentos rojos se aplican vía [data-rt-theme="redteam"].
-    if (base === 'dark' || base === 'redteam') document.documentElement.setAttribute('data-theme', 'dark');
-    if (base === 'htb')  document.documentElement.setAttribute('data-theme', 'htb');
-}
-
-function setReportTheme(theme) {
-    // Si el tema ya no existe (p.ej. tras eliminar uno personalizado), caemos a 'light'.
-    const exists = listAllThemes().some(t => t.slug === theme);
-    if (!exists) theme = 'light';
-    state.reportTheme = theme;
-    state.isDirty = true;
-    applyThemeAttributes(theme);
-    localStorage.setItem('pwnly_theme', theme); // cache local rápida (no afecta a la exportación)
-    persistSettings();
-    renderApp();
-}
 
 function generatePdf() {
     openPdfModal();
@@ -4575,11 +4120,13 @@ async function exportHtml() {
 async function showReports() {
     await loadSavedReports();
     state.showReportSelector = true;
+    state.showThemesPage = false;
     renderApp();
 }
 
 function hideReports() {
     state.showReportSelector = false;
+    state.showThemesPage = false;
     renderApp();
 }
 
@@ -5430,7 +4977,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // Cargamos los temas personalizados para que el PDF pueda usar cualquiera.
         await loadCustomThemes();
-        state.reportTheme = (themeParam && listAllThemes().some(t => t.slug === themeParam)) ? themeParam : 'light';
+        state.reportTheme = (themeParam && listAllThemes().some(t => t.slug === themeParam)) ? themeParam : ((state.customThemes[0] && state.customThemes[0].slug) || '');
         applyThemeAttributes(state.reportTheme);
         if (params.get('show_severity_bars') === 'false') {
             state.pdfShowSeverityBars = false;
@@ -5493,7 +5040,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // para que la exportación capture el 100% del estado.
             await loadCustomThemes();
             const savedTheme = localStorage.getItem('pwnly_theme');
-            state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : 'light';
+            state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
             await loadSettings();
             applyThemeAttributes(state.reportTheme);
             // En la página de cuenta cargamos usuarios y API keys.
@@ -5521,13 +5068,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Aplica el fondo del tema activo a html/body (usado en modo impresión para que
 // el PDF no muestre franjas blancas con temas oscuros o personalizados).
+// Pinta el fondo de la página (márgenes incluidos) con el color de fondo real
+// del propio contenido del tema activo, para que coincida sea cual sea el CSS
+// que haya escrito el usuario (ya no depende de una variable --rt-* fija).
 function applyPrintBackground() {
     try {
-        const probe = document.querySelector('.preview-container') || document.documentElement;
-        const bg = getComputedStyle(probe).getPropertyValue('--rt-pageBg').trim();
-        if (bg) {
+        const probe = document.querySelector('.preview-container');
+        if (!probe) return;
+        const bg = getComputedStyle(probe).backgroundColor;
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
             document.documentElement.style.background = bg;
             document.body.style.background = bg;
         }
-    } catch (e) { /* sin variables: dejamos el fondo por defecto */ }
+    } catch (e) { /* dejamos el fondo por defecto */ }
 }
