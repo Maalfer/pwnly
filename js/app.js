@@ -996,8 +996,14 @@ function renderEditor() {
 
     return `
         <div class="editor-page">
-        <div class="editor-container">
-            <div class="editor-left">
+        <div class="editor-meta-grid">
+            ${renderGeneralInfoCard()}
+            ${renderExecutiveSummaryCard()}
+            ${renderScopeMethodologySection()}
+            ${renderRevisionHistorySection()}
+        </div>
+        <div class="editor-work-grid">
+            <div class="editor-work-form">
                 <div class="card">
                     <h2>${t.newFinding}</h2>
                     <p class="text-muted">${t.newFindingDesc}</p>
@@ -1152,6 +1158,8 @@ function renderEditor() {
                             </div>
                         </div>
 
+                        ${renderFindingProFieldsEditor()}
+
                         <div class="form-actions">
                             <button type="submit" class="btn-primary">${state.editingFindingIndex !== null ? t.updateFinding : t.addFinding}</button>
                             <button type="button" onclick="resetFindingForm()">${t.cancel}</button>
@@ -1159,26 +1167,26 @@ function renderEditor() {
                     </form>
                 </div>
             </div>
-            
-            <div class="editor-right">
-                ${renderAuditData()}
+
+            <div class="editor-work-list">
+                ${renderFindingsList()}
             </div>
-        </div>
-        <div class="findings-section">
-            ${renderFindingsList()}
         </div>
         </div>
     `;
 }
 
-function renderAuditData() {
+// Tarjeta 1: identidad del informe (título, cliente, portada, clasificación).
+// Es la única sección siempre visible sin colapsar: son los datos esenciales.
+function renderGeneralInfoCard() {
     const t = UI[state.lang];
+    const isEs = state.lang === 'es';
     const d = state.auditData;
 
     return `
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h3 style="margin: 0;">Datos de la Auditoría</h3>
+        <div class="card editor-meta-card editor-meta-card--wide">
+            <div class="card-header-row">
+                <h3>${isEs ? 'Información general' : 'General information'}</h3>
                 <button class="btn-primary" onclick="saveCurrentReport()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;" title="${t.saveReport}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -1190,84 +1198,82 @@ function renderAuditData() {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>${t.documentTitle}</label>
-                    <input type="text" value="${escapeHTML(d.documentTitle)}" onchange="updateAuditData('documentTitle', this.value)">
+                    <label for="genDocTitle">${t.documentTitle}</label>
+                    <input id="genDocTitle" type="text" value="${escapeHTML(d.documentTitle)}" onchange="updateAuditData('documentTitle', this.value)">
                 </div>
                 <div class="form-group">
-                    <label>${t.clientCompany}</label>
-                    <input type="text" value="${escapeHTML(d.clientCompany)}" onchange="updateAuditData('clientCompany', this.value)">
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group" style="flex: 1;">
-                    <label>${t.clientLogo1 || 'Logotipo 1'}</label>
-                    <input type="file" accept="image/*" onchange="handleClientLogoUpload(event, 0)">
-                    ${d.clientLogo[0] ? `
-                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <img src="${escapeHTML(d.clientLogo[0])}" alt="Logo 1" style="height: 40px; border-radius: 4px; border: 1px solid #e5e7eb;">
-                            <button type="button" class="btn-sm btn-secondary" onclick="removeClientLogo(0)">×</button>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="form-group" style="flex: 1;">
-                    <label>${t.clientLogo2 || 'Logotipo 2'}</label>
-                    <input type="file" accept="image/*" onchange="handleClientLogoUpload(event, 1)">
-                    ${d.clientLogo[1] ? `
-                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <img src="${escapeHTML(d.clientLogo[1])}" alt="Logo 2" style="height: 40px; border-radius: 4px; border: 1px solid #e5e7eb;">
-                            <button type="button" class="btn-sm btn-secondary" onclick="removeClientLogo(1)">×</button>
-                        </div>
-                    ` : ''}
+                    <label for="genClientCompany">${t.clientCompany}</label>
+                    <input id="genClientCompany" type="text" value="${escapeHTML(d.clientCompany)}" onchange="updateAuditData('clientCompany', this.value)">
                 </div>
             </div>
 
-            <div class="form-row">
+            <div class="form-row-3">
                 <div class="form-group">
-                    <label>${t.targetAsset}</label>
-                    <input type="text" value="${escapeHTML(d.targetAsset)}" onchange="updateAuditData('targetAsset', this.value)">
+                    <label for="genTargetAsset">${t.targetAsset}</label>
+                    <input id="genTargetAsset" type="text" value="${escapeHTML(d.targetAsset)}" onchange="updateAuditData('targetAsset', this.value)">
                 </div>
                 <div class="form-group">
-                    <label>${t.auditorCompany}</label>
-                    <input type="text" value="${escapeHTML(d.auditorCompany)}" onchange="updateAuditData('auditorCompany', this.value)">
+                    <label for="genAuditorCompany">${t.auditorCompany}</label>
+                    <input id="genAuditorCompany" type="text" value="${escapeHTML(d.auditorCompany)}" onchange="updateAuditData('auditorCompany', this.value)">
+                </div>
+                <div class="form-group">
+                    <label for="genAuditorName">${t.auditorName}</label>
+                    <input id="genAuditorName" type="text" value="${escapeHTML(d.auditorName)}" onchange="updateAuditData('auditorName', this.value)">
                 </div>
             </div>
-            <div class="form-row">
+
+            <div class="form-row-4">
                 <div class="form-group">
-                    <label>${t.auditorName}</label>
-                    <input type="text" value="${escapeHTML(d.auditorName)}" onchange="updateAuditData('auditorName', this.value)">
-                </div>
-                <div class="form-group">
-                    <label>${t.classification}</label>
-                    <select onchange="updateAuditData('classification', this.value)">
+                    <label for="genClassification">${t.classification}</label>
+                    <select id="genClassification" onchange="updateAuditData('classification', this.value)">
                         ${Object.entries(t.classifications).map(([key, label]) =>
         `<option value="${key}" ${d.classification === key ? 'selected' : ''}>${label}</option>`
     ).join('')}
                     </select>
                 </div>
-            </div>
-            <div class="form-row">
                 <div class="form-group">
-                    <label>${t.version}</label>
-                    <input type="text" value="${escapeHTML(d.version)}" onchange="updateAuditData('version', this.value)">
-                </div>
-                <div class="form-group">
-                    <label>${t.date}</label>
-                    <input type="date" value="${escapeHTML(d.date)}" onchange="updateAuditData('date', this.value)">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>${t.auditType}</label>
-                <select onchange="updateAuditData('auditType', this.value)">
-                    ${Object.entries(t.auditTypes).map(([key, label]) =>
+                    <label for="genAuditType">${t.auditType}</label>
+                    <select id="genAuditType" onchange="updateAuditData('auditType', this.value)">
+                        ${Object.entries(t.auditTypes).map(([key, label]) =>
         `<option value="${key}" ${d.auditType === key ? 'selected' : ''}>${label}</option>`
     ).join('')}
-                </select>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="genVersion">${t.version}</label>
+                    <input id="genVersion" type="text" value="${escapeHTML(d.version)}" onchange="updateAuditData('version', this.value)">
+                </div>
+                <div class="form-group">
+                    <label for="genDate">${t.date}</label>
+                    <input id="genDate" type="date" value="${escapeHTML(d.date)}" onchange="updateAuditData('date', this.value)">
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>${t.incidents}</label>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="genLogo1">${t.clientLogo1 || 'Logotipo 1'}</label>
+                    <input id="genLogo1" type="file" accept="image/*" onchange="handleClientLogoUpload(event, 0)">
+                    ${d.clientLogo[0] ? `
+                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <img src="${escapeHTML(d.clientLogo[0])}" alt="${isEs ? 'Vista previa del logotipo 1' : 'Logo 1 preview'}" style="height: 40px; border-radius: 4px; border: 1px solid #e5e7eb;">
+                            <button type="button" class="btn-sm btn-secondary" onclick="removeClientLogo(0)" aria-label="${isEs ? 'Quitar logotipo 1' : 'Remove logo 1'}">×</button>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="form-group">
+                    <label for="genLogo2">${t.clientLogo2 || 'Logotipo 2'}</label>
+                    <input id="genLogo2" type="file" accept="image/*" onchange="handleClientLogoUpload(event, 1)">
+                    ${d.clientLogo[1] ? `
+                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <img src="${escapeHTML(d.clientLogo[1])}" alt="${isEs ? 'Vista previa del logotipo 2' : 'Logo 2 preview'}" style="height: 40px; border-radius: 4px; border: 1px solid #e5e7eb;">
+                            <button type="button" class="btn-sm btn-secondary" onclick="removeClientLogo(1)" aria-label="${isEs ? 'Quitar logotipo 2' : 'Remove logo 2'}">×</button>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <fieldset class="form-group" style="border:none;padding:0;margin-bottom:0;">
+                <legend style="font-size:0.6875rem;font-weight:700;color:#64748b;margin-bottom:0.375rem;letter-spacing:0.06em;text-transform:uppercase;padding:0;">${t.incidents}</legend>
                 <div class="incidents-toggle" style="display:flex; gap:0.75rem; margin-bottom:0.5rem;">
                     <label style="display:flex; align-items:center; gap:0.4rem; font-weight:500; text-transform:none; letter-spacing:normal; cursor:pointer;">
                         <input type="radio" name="hasIncidents" value="no" ${!d.hasIncidents ? 'checked' : ''} onchange="updateAuditData('hasIncidents', false); document.getElementById('incidentsTextContainer').style.display='none';" style="width:auto; padding:0; margin:0;">
@@ -1278,35 +1284,39 @@ function renderAuditData() {
                         ${t.incidentsYes}
                     </label>
                 </div>
-                <div id="incidentsTextContainer" style="display: ${d.hasIncidents ? 'block' : 'none'}; margin-top: 0.5rem;">
-                    <textarea rows="3" placeholder="${t.incidentsDesc}..." oninput="updateAuditData('incidentsText', this.value)">${escapeHTML(d.incidentsText)}</textarea>
+                <div id="incidentsTextContainer" style="display: ${d.hasIncidents ? 'block' : 'none'};">
+                    <label for="genIncidentsText" class="sr-only">${t.incidentsDesc}</label>
+                    <textarea id="genIncidentsText" rows="3" placeholder="${t.incidentsDesc}..." oninput="updateAuditData('incidentsText', this.value)">${escapeHTML(d.incidentsText)}</textarea>
                 </div>
-            </div>
+            </fieldset>
+        </div>`;
+}
 
-            <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
-
+// Tarjeta 2: resumen ejecutivo (textos largos del cierre del informe).
+function renderExecutiveSummaryCard() {
+    const t = UI[state.lang];
+    const d = state.auditData;
+    return `
+        <div class="card editor-meta-card">
+            <h3>${state.lang === 'es' ? 'Resumen ejecutivo' : 'Executive summary'}</h3>
             <div class="form-group">
-                <label>${t.auditSummary}</label>
+                <label for="genAuditSummary">${t.auditSummary}</label>
                 <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.auditSummaryDesc}</small>
-                <textarea rows="4" placeholder="${t.auditSummary}..." oninput="updateAuditData('auditSummary', this.value)">${escapeHTML(d.auditSummary)}</textarea>
+                <textarea id="genAuditSummary" rows="4" placeholder="${t.auditSummary}..." oninput="updateAuditData('auditSummary', this.value)">${escapeHTML(d.auditSummary)}</textarea>
             </div>
 
             <div class="form-group">
-                <label>${t.testsPerformed}</label>
+                <label for="genTestsPerformed">${t.testsPerformed}</label>
                 <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.testsPerformedDesc}</small>
-                <textarea rows="4" placeholder="${t.testsPerformed}..." oninput="updateAuditData('testsPerformed', this.value)">${escapeHTML(d.testsPerformed)}</textarea>
+                <textarea id="genTestsPerformed" rows="4" placeholder="${t.testsPerformed}..." oninput="updateAuditData('testsPerformed', this.value)">${escapeHTML(d.testsPerformed)}</textarea>
             </div>
 
-            <div class="form-group">
-                <label>${t.recommendedSolutions}</label>
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="genRecommendedSolutions">${t.recommendedSolutions}</label>
                 <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.recommendedSolutionsDesc}</small>
-                <textarea rows="4" placeholder="${t.recommendedSolutions}..." oninput="updateAuditData('recommendedSolutions', this.value)">${escapeHTML(d.recommendedSolutions)}</textarea>
+                <textarea id="genRecommendedSolutions" rows="4" placeholder="${t.recommendedSolutions}..." oninput="updateAuditData('recommendedSolutions', this.value)">${escapeHTML(d.recommendedSolutions)}</textarea>
             </div>
-
-            ${renderScopeMethodologySection()}
-            ${renderRevisionHistorySection()}
-        </div>
-    `;
+        </div>`;
 }
 
 const METHODOLOGY_STANDARDS = [
@@ -1382,16 +1392,89 @@ function _findingFieldToggle(key, isEs) {
     </span>`;
 }
 
+// Metadatos profesionales opcionales del hallazgo (estado, riesgo, OWASP,
+// activos afectados, cumplimiento, notas de re-test). El modelo de datos y
+// la plantilla del informe ya los soportaban; esto es lo que faltaba para
+// poder rellenarlos desde la interfaz.
+function renderFindingProFieldsEditor() {
+    const t = UI[state.lang];
+    const isEs = state.lang === 'es';
+    const cf = state.currentFinding;
+
+    return `
+        <details class="pro-fields-details" open>
+            <summary>${isEs ? 'Metadatos profesionales (opcional)' : 'Professional metadata (optional)'}</summary>
+            <div class="details-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="findingStatus">${isEs ? 'Estado' : 'Status'}</label>
+                        <select id="findingStatus" onchange="updateCurrentFinding('status', this.value)">
+                            ${Object.entries(t.findingStatuses).map(([key, label]) =>
+        `<option value="${key}" ${cf.status === key ? 'selected' : ''}>${label}</option>`
+    ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.375rem;">
+                            <label style="margin:0;" for="findingOwasp">OWASP Top 10</label>
+                            ${_findingFieldToggle('owasp', isEs)}
+                        </div>
+                        <input id="findingOwasp" type="text" placeholder="A03:2021 – Injection" value="${escapeHTML(cf.owasp || '')}" oninput="updateCurrentFinding('owasp', this.value)">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.375rem;">
+                        <label style="margin:0;">${isEs ? 'Probabilidad × Impacto (matriz de riesgo)' : 'Likelihood × Impact (risk matrix)'}</label>
+                        ${_findingFieldToggle('risk', isEs)}
+                    </div>
+                    <div class="form-row">
+                        <select id="findingLikelihood" aria-label="${isEs ? 'Probabilidad' : 'Likelihood'}" onchange="updateCurrentFinding('likelihood', this.value)">
+                            ${Object.entries(t.riskLevels).map(([key, label]) =>
+        `<option value="${key}" ${cf.likelihood === key ? 'selected' : ''}>${label}</option>`
+    ).join('')}
+                        </select>
+                        <select id="findingImpactRating" aria-label="${isEs ? 'Impacto' : 'Impact'}" onchange="updateCurrentFinding('impactRating', this.value)">
+                            ${Object.entries(t.riskLevels).map(([key, label]) =>
+        `<option value="${key}" ${cf.impactRating === key ? 'selected' : ''}>${label}</option>`
+    ).join('')}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="findingAffectedAssets">${isEs ? 'Activos afectados' : 'Affected assets'}</label>
+                    <textarea id="findingAffectedAssets" rows="2" placeholder="${isEs ? 'Endpoints, parámetros, hosts afectados...' : 'Affected endpoints, parameters, hosts...'}" oninput="updateCurrentFinding('affectedAssets', this.value)">${escapeHTML(cf.affectedAssets || '')}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.375rem;">
+                        <label style="margin:0;" for="findingCompliance">${isEs ? 'Cumplimiento / mapeo (separado por comas)' : 'Compliance / mapping (comma-separated)'}</label>
+                        ${_findingFieldToggle('compliance', isEs)}
+                    </div>
+                    <input id="findingCompliance" type="text" placeholder="PCI-DSS 6.5.1, ISO 27001 A.14.2" value="${escapeHTML((cf.compliance || []).join(', '))}" oninput="updateCurrentFindingCsv('compliance', this.value)">
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.375rem;">
+                        <label style="margin:0;" for="findingRetestNotes">${isEs ? 'Notas de re-test' : 'Re-test notes'}</label>
+                        ${_findingFieldToggle('retest', isEs)}
+                    </div>
+                    <textarea id="findingRetestNotes" rows="2" placeholder="${isEs ? 'Resultado de la verificación tras la remediación...' : 'Verification result after remediation...'}" oninput="updateCurrentFinding('retestNotes', this.value)">${escapeHTML(cf.retestNotes || '')}</textarea>
+                </div>
+            </div>
+        </details>
+    `;
+}
+
 function renderScopeMethodologySection() {
     const isEs = state.lang === 'es';
     const d = state.auditData;
     const selected = d.methodologyStandards || [];
     return `
-        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-            <h3 style="margin:0;">${isEs ? 'Alcance y Metodología' : 'Scope & Methodology'}</h3>
-        </div>
-
+        <details class="card editor-meta-card" open>
+        <summary><h3>${isEs ? 'Alcance y Metodología' : 'Scope & Methodology'}</h3></summary>
+        <div class="details-body">
         <div class="form-row">
             <div class="form-group">
                 <label>${isEs ? 'Inicio del engagement' : 'Engagement start'}</label>
@@ -1447,6 +1530,8 @@ function renderScopeMethodologySection() {
             </div>
             <textarea rows="4" placeholder="Burp Suite, nmap, sqlmap, ffuf..." oninput="updateAuditData('toolsUsed', this.value)" style="${!getScopeFieldVis('toolsUsed') ? 'opacity:0.4;' : ''}">${escapeHTML(d.toolsUsed || '')}</textarea>
         </div>
+        </div>
+        </details>
     `;
 }
 
@@ -1494,7 +1579,7 @@ function renderRevisionHistorySection() {
         ? rows.map(r => escapeHTML(r.version || '?')).join(' · ')
         : (isEs ? 'Sin revisiones registradas.' : 'No revisions recorded.');
     return `
-        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
+        <div class="card editor-meta-card editor-meta-card--compact">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;">
             <div style="display:flex;align-items:center;gap:0.5rem;">
                 <h3 style="margin:0;">${isEs ? 'Historial de revisiones' : 'Revision history'}</h3>
@@ -1507,6 +1592,7 @@ function renderRevisionHistorySection() {
             </button>
         </div>
         <p class="text-muted" style="font-size:0.82rem;margin:0.55rem 0 0;">${summary}</p>
+        </div>
     `;
 }
 

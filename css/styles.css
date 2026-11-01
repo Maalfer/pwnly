@@ -2800,18 +2800,144 @@ button:disabled,
 }
 
 /* ---- Editor ---- */
-.editor-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    max-width: 1400px;
+.editor-page {
+    max-width: 1680px;
     margin: 0 auto;
 }
 
-@media (max-width: 1024px) {
-    .editor-container {
-        grid-template-columns: 1fr;
-    }
+/* Datos del reporte: se editan poco, así que van arriba en tarjetas cortas
+   y bien separadas en vez de una única tarjeta interminable. */
+.editor-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.5rem;
+}
+
+.editor-meta-card { margin-bottom: 0; }
+.editor-meta-card--wide { grid-column: 1 / -1; }
+.editor-meta-card--compact { padding-bottom: 1.25rem; }
+
+.card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+.card-header-row h3 { margin: 0; }
+
+/* Zona de trabajo: formulario de hallazgo a la izquierda, lista de hallazgos
+   ya guardados a la derecha, visibles a la vez (antes la lista quedaba muy
+   por debajo, obligando a bajar para ver lo ya guardado). */
+.editor-work-grid {
+    display: grid;
+    grid-template-columns: minmax(380px, 460px) 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.editor-work-list {
+    position: sticky;
+    top: 1.25rem;
+    max-height: calc(100vh - 2.5rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+@media (max-width: 1100px) {
+    .editor-work-grid { grid-template-columns: 1fr; }
+    .editor-work-list { position: static; max-height: none; overflow-y: visible; }
+}
+
+@media (max-width: 640px) {
+    .editor-meta-grid { grid-template-columns: 1fr; }
+}
+
+/* Filas de campos cortos más densas que .form-row (2 col): 3 y 4 por fila
+   en pantallas anchas, colapsando progresivamente. */
+.form-row-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+.form-row-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+@media (max-width: 900px) {
+    .form-row-3 { grid-template-columns: repeat(2, 1fr); }
+    .form-row-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .form-row-3, .form-row-4 { grid-template-columns: 1fr; }
+}
+
+/* Secciones colapsables: alcance/metodología (tarjeta completa) y metadatos
+   profesionales del hallazgo (dentro del formulario). <details> nativo:
+   operable por teclado y anunciado por lectores de pantalla sin JS extra. */
+details.editor-meta-card summary,
+.pro-fields-details summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+details.editor-meta-card summary::-webkit-details-marker,
+.pro-fields-details summary::-webkit-details-marker { display: none; }
+
+details.editor-meta-card summary h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+details.editor-meta-card summary h3::before {
+    content: '▸';
+    color: #94a3b8;
+    font-size: 0.8em;
+    transition: transform 0.15s;
+}
+details.editor-meta-card[open] summary h3::before { transform: rotate(90deg); }
+details.editor-meta-card .details-body { margin-top: 1.25rem; }
+
+.pro-fields-details {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px dashed #e2e8f0;
+}
+.pro-fields-details summary {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.pro-fields-details summary::before {
+    content: '▸';
+    font-size: 0.85em;
+    transition: transform 0.15s;
+}
+.pro-fields-details[open] summary::before { transform: rotate(90deg); }
+.pro-fields-details .details-body { margin-top: 1rem; }
+.pro-fields-details .form-group:last-child,
+.pro-fields-details .form-row:last-child { margin-bottom: 0; }
+
+/* Oculto visualmente pero accesible a lectores de pantalla (radios de
+   incidencias ya llevan texto visible; el textarea asociado necesita label
+   propio para el emparejamiento for/id sin duplicar el texto en pantalla). */
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* ---- Cards ---- */
@@ -3091,13 +3217,7 @@ button {
     gap: 0.5rem;
 }
 
-/* Sección de findings a ancho completo (fuera de la columna del editor) */
-.findings-section {
-    max-width: 1400px;
-    margin: 1.5rem auto 0;
-}
-
-/* Cabecera de la sección de findings (título + contador), centrada */
+/* Cabecera de la sección de findings (título + contador) */
 .findings-section-header {
     display: flex;
     align-items: center;
@@ -3141,15 +3261,12 @@ button {
     padding: 1.25rem 0;
 }
 
-/* Rejilla de dos columnas para los findings */
+/* Rejilla de findings: tantas columnas como quepan (antes era fija a 2,
+   desaprovechando el espacio cuando la lista tiene más ancho disponible). */
 .findings-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 0.625rem;
-}
-
-@media (max-width: 640px) {
-    .findings-grid { grid-template-columns: 1fr; }
 }
 
 .finding-item {
