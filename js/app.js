@@ -65,7 +65,8 @@ const state = {
         owasp: '',
         compliance: [],
         retestNotes: '',
-        images: []
+        images: [],
+        imageCaptions: []
     },
     // Temas personalizados y gestor de temas
     customThemes: [],
@@ -744,7 +745,8 @@ function normalizeFinding(f) {
         impact_rating: 'impactRating',
         retest_notes: 'retestNotes',
         template_key: 'templateKey',
-        fields_visibility: 'fieldsVisibility'
+        fields_visibility: 'fieldsVisibility',
+        image_captions: 'imageCaptions'
     };
     Object.entries(map).forEach(([snake, camel]) => {
         if (f[camel] === undefined && f[snake] !== undefined) f[camel] = f[snake];
@@ -752,6 +754,9 @@ function normalizeFinding(f) {
     if (!Array.isArray(f.references)) f.references = f.references ? [].concat(f.references) : [];
     if (!Array.isArray(f.compliance)) f.compliance = f.compliance ? [].concat(f.compliance) : [];
     if (typeof f.fieldsVisibility !== 'object' || !f.fieldsVisibility) f.fieldsVisibility = {};
+    if (!Array.isArray(f.imageCaptions)) f.imageCaptions = Array.isArray(f.image_captions) ? [...f.image_captions] : [];
+    if (!Array.isArray(f.images)) f.images = [];
+    while (f.imageCaptions.length < f.images.length) f.imageCaptions.push('');
     if (!f.status) f.status = 'open';
     return f;
 }
@@ -1115,6 +1120,12 @@ function renderEditor() {
                                     <span class="image-order-badge">${idx + 1}</span>
                                     <img src="${escapeHTML(img)}" alt="Evidencia ${idx + 1}" draggable="false">
                                     <button type="button" class="image-remove-btn" onclick="removeImage(${idx})">×</button>
+                                    <div class="image-caption-wrap">
+                                        <input type="text" class="image-caption-input"
+                                            placeholder="${state.lang === 'es' ? 'Pie de imagen (opcional)' : 'Image caption (optional)'}"
+                                            value="${escapeHTML(state.currentFinding.imageCaptions[idx] || '')}"
+                                            oninput="state.currentFinding.imageCaptions[${idx}] = this.value">
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>
@@ -2993,6 +3004,7 @@ function renderPreview() {
                                     ${f.images.map((img, imgIdx) => `
                                         <div style="border: 1px solid ${c.border}; border-radius: 8px; overflow: hidden; break-inside: avoid; background: ${c.pageBg}; padding: 0.5rem;">
                                             <img src="${escapeHTML(img)}" alt="${t.evidence} ${imgIdx + 1}" style="width: 100%; height: auto; border-radius: 4px; display: block;">
+                                            ${Array.isArray(f.imageCaptions || f.image_captions) && (f.imageCaptions || f.image_captions)[imgIdx] ? `<div style="padding: 0.4rem 0.25rem 0.1rem; font-size: 0.8rem; font-style: italic; color: ${c.textMuted}; text-align: center; line-height: 1.4;">${escapeHTML((f.imageCaptions || f.image_captions)[imgIdx])}</div>` : ''}
                                         </div>
                                     `).join('')}
                                 </div>
@@ -4851,7 +4863,10 @@ function editFinding(index) {
         compliance: Array.isArray(finding.compliance) ? [...finding.compliance] : [],
         retestNotes: finding.retestNotes || '',
         fieldsVisibility: Object.assign({}, finding.fieldsVisibility || {}),
-        images: finding.images ? [...finding.images] : []
+        images: finding.images ? [...finding.images] : [],
+        imageCaptions: Array.isArray(finding.imageCaptions || finding.image_captions)
+            ? [...(finding.imageCaptions || finding.image_captions)]
+            : (finding.images ? finding.images.map(() => '') : [])
     };
 
     state.editingFindingIndex = index;
@@ -4872,7 +4887,10 @@ async function handleImageUpload(event) {
     const dataUrls = await Promise.all(imageFiles.map(readFileAsDataURL));
 
     dataUrls.forEach(url => {
-        if (url) state.currentFinding.images.push(url);
+        if (url) {
+            state.currentFinding.images.push(url);
+            state.currentFinding.imageCaptions.push('');
+        }
     });
 
     if (dataUrls.length > 0) renderApp();
@@ -4881,6 +4899,7 @@ async function handleImageUpload(event) {
 
 function removeImage(index) {
     state.currentFinding.images.splice(index, 1);
+    state.currentFinding.imageCaptions.splice(index, 1);
     renderApp();
 }
 
@@ -4917,9 +4936,12 @@ function imageDrop(event, targetIdx) {
     const from = _draggedImageIdx;
     _draggedImageIdx = null;
     const imgs = state.currentFinding.images;
+    const caps = state.currentFinding.imageCaptions;
     if (from === null || from === targetIdx || from < 0 || from >= imgs.length) { renderApp(); return; }
-    const [moved] = imgs.splice(from, 1);
-    imgs.splice(targetIdx, 0, moved);
+    const [movedImg] = imgs.splice(from, 1);
+    const [movedCap] = caps.splice(from, 1);
+    imgs.splice(targetIdx, 0, movedImg);
+    caps.splice(targetIdx, 0, movedCap);
     state.isDirty = true;
     renderApp();
 }
@@ -4940,7 +4962,10 @@ async function handleImagePaste(event) {
     const dataUrls = await Promise.all(blobs.map(readFileAsDataURL));
 
     dataUrls.forEach(url => {
-        if (url) state.currentFinding.images.push(url);
+        if (url) {
+            state.currentFinding.images.push(url);
+            state.currentFinding.imageCaptions.push('');
+        }
     });
 
     if (dataUrls.length > 0) {
@@ -5354,6 +5379,7 @@ async function saveCurrentReport(silent = false) {
                 retest_notes: finding.retestNotes || finding.retest_notes || '',
                 fields_visibility: finding.fieldsVisibility || finding.fields_visibility || {},
                 images: finding.images || [],
+                image_captions: finding.imageCaptions || finding.image_captions || [],
                 order_index: i
             };
 

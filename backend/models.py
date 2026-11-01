@@ -97,6 +97,9 @@ class Finding(Base):
     # Imágenes se guardan como JSON array de URLs/data URLs
     images = Column(JSON, default=list)
 
+    # Pies de foto alineados con `images` (mismo índice)
+    image_captions = Column(JSON, default=list)
+
     # Orden del hallazgo en el reporte
     order_index = Column(Integer, default=0)
 

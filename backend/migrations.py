@@ -17,6 +17,7 @@ def run_migrations(engine):
     _migrate_add_exploit_field(engine)
     _migrate_add_show_scope_section(engine)
     _migrate_create_api_keys(engine)
+    _migrate_add_image_captions(engine)
     _migrate_add_indexes(engine)
 
 
@@ -183,6 +184,13 @@ def _migrate_add_cwe_field(engine):
                 print("✅ Columna cwe agregada a findings")
     except Exception as e:
         print(f"⚠️  Migración de CWE: {e}")
+
+
+def _migrate_add_image_captions(engine):
+    """Migration: añade image_captions (pies de foto) a findings."""
+    _add_columns(engine, "findings", [
+        ("image_captions", "TEXT DEFAULT '[]'"),
+    ])
 
 
 def _migrate_add_indexes(engine):

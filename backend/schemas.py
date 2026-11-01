@@ -115,6 +115,7 @@ class FindingBase(BaseModel):
     retest_notes: str = ""
     fields_visibility: dict = {}
     images: List[str] = []
+    image_captions: List[str] = []
     order_index: int = 0
 
     @field_validator('severity')
@@ -127,7 +128,7 @@ class FindingBase(BaseModel):
     def _sanitize_images(cls, v):
         return sanitize_image_list(v)
 
-    @field_validator('references', 'compliance')
+    @field_validator('references', 'compliance', 'image_captions')
     @classmethod
     def _sanitize_str_lists(cls, v):
         return _clean_str_list(v)
@@ -171,6 +172,7 @@ class FindingPatch(BaseModel):
     retest_notes: Optional[str] = None
     fields_visibility: Optional[dict] = None
     images: Optional[List[str]] = None
+    image_captions: Optional[List[str]] = None
     order_index: Optional[int] = None
 
     @field_validator('severity')
@@ -183,7 +185,7 @@ class FindingPatch(BaseModel):
     def _sanitize_images(cls, v):
         return sanitize_image_list(v) if v is not None else v
 
-    @field_validator('references', 'compliance')
+    @field_validator('references', 'compliance', 'image_captions')
     @classmethod
     def _sanitize_str_lists(cls, v):
         return _clean_str_list(v) if v is not None else v
