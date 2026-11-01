@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://github.com/Maalfer/pwnly/blob/main/assets/images/pwnly.png?raw=true" alt="Pwnly Banner" width="100%">
+  <img src="https://raw.githubusercontent.com/Maalfer/pwnly/main/assets/images/pwnly.png?v=2" alt="Pwnly Banner" width="100%">
 </p>
 
 <p align="center">
-  <img src="assets/logo.png" alt="Pwnly Logo" width="110" height="110" style="border-radius: 20px;">
+  <img src="assets/logo.png?v=2" alt="Pwnly Logo" width="110" height="110">
 </p>
 
 <h1 align="center">Pwnly</h1>
