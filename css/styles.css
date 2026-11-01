@@ -2655,7 +2655,7 @@ button:disabled,
 }
 
 .btn-enter {
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: #3b82f6;
     color: white;
     border: none;
     padding: 1rem 2.5rem;
@@ -3036,7 +3036,7 @@ button {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: #3b82f6;
     color: white;
     border: none;
     padding: 0.5625rem 1.25rem;
@@ -3049,7 +3049,7 @@ button {
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    background: #2563eb;
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
 }
@@ -4868,7 +4868,7 @@ button {
     padding: 0.65rem 1rem;
     border: none;
     border-radius: 0.55rem;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: #3b82f6;
     color: #fff;
     font-weight: 700;
     font-size: 0.92rem;
@@ -5709,13 +5709,13 @@ button {
 [data-rt-theme="redteam"] .btn-primary,
 [data-rt-theme="redteam"] .navbar-actions button.btn-primary,
 [data-rt-theme="redteam"] .login-btn {
-    background: linear-gradient(135deg,#ef4444,#b91c1c) !important;
+    background: #ef4444 !important;
     border-color: #b91c1c !important;
     color: #fff !important;
     box-shadow: 0 1px 3px rgba(239,68,68,0.3) !important;
 }
 [data-rt-theme="redteam"] .btn-primary:hover,
-[data-rt-theme="redteam"] .navbar-actions button.btn-primary:hover { background: linear-gradient(135deg,#dc2626,#991b1b) !important; border-color: #991b1b !important; }
+[data-rt-theme="redteam"] .navbar-actions button.btn-primary:hover { background: #dc2626 !important; border-color: #991b1b !important; }
 
 /* Inputs / selects / textareas */
 [data-rt-theme="redteam"] .form-group input,
