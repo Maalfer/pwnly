@@ -1,4 +1,4 @@
-"""Tests para la gestión de hallazgos vía API REST (v2.4.0).
+"""Tests para la gestión de hallazgos vía API REST (v1.0.0).
 
 Cubre el flujo de gestión de hallazgos vía API REST: obtener un hallazgo
 concreto, actualización parcial con PATCH y creación en lote.

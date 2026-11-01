@@ -38,7 +38,7 @@ _enable_docs = os.environ.get("ENABLE_DOCS", "0") == "1"
 app = FastAPI(
     title="Pwnly API",
     description="API para gestión de reportes de pentesting",
-    version="2.4.0",
+    version="1.0.0",
     docs_url="/docs" if _enable_docs else None,
     redoc_url="/redoc" if _enable_docs else None,
     openapi_url="/openapi.json" if _enable_docs else None,
@@ -124,7 +124,7 @@ app.mount("/assets", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "assets
 
 @app.get("/api")
 def api_info():
-    return {"message": "Pwnly API", "version": "2.4.0"}
+    return {"message": "Pwnly API", "version": "1.0.0"}
 
 
 @app.get("/")

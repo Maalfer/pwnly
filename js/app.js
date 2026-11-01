@@ -1,6 +1,6 @@
 // Versión de la aplicación. Se muestra de forma persistente en la interfaz
 // (login y navbar) y debe coincidir con la del backend (FastAPI) y el badge del README.
-const APP_VERSION = '2.3.2';
+const APP_VERSION = '1.0.0';
 
 const state = {
     lang: 'es',
