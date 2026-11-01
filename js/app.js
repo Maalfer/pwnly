@@ -1731,7 +1731,7 @@ const DEFAULT_THEME_TEMPLATE_HTML = `<div class="cover">
     </div>
 
     {{#if this.owasp_visible}}{{#if this.owasp}}<p><strong>OWASP:</strong> {{this.owasp}}</p>{{/if}}{{/if}}
-    {{#if this.risk_visible}}<p><strong>Probabilidad × Impacto:</strong> {{this.likelihood_label}} × {{this.impact_rating_label}}</p>{{/if}}
+    {{#if this.risk_visible}}{{#if this.likelihood}}<p><strong>Probabilidad × Impacto:</strong> {{this.likelihood_label}} × {{this.impact_rating_label}}</p>{{/if}}{{/if}}
     {{#if this.cvss_vector}}<p class="mono-inline">{{this.cvss_vector}}</p>{{/if}}
     {{#if this.affected_assets}}<p><strong>Activos afectados:</strong></p><pre class="mono-block">{{this.affected_assets}}</pre>{{/if}}
 
