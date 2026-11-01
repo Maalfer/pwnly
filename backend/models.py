@@ -110,17 +110,17 @@ class Finding(Base):
 
 
 class Theme(Base):
-    """Tema de estilos del informe. Los built-in (light/dark/htb) se siembran al
-    arrancar; los personalizados los crean los usuarios (paleta de variables CSS)."""
+    """Tema de informe creado íntegramente por el usuario: una plantilla HTML
+    (con sintaxis {{variable}} / {{#each}} / {{#if}} sobre los datos del
+    reporte) más una hoja de estilos CSS libre. No existen temas de fábrica:
+    todo tema sale del editor "Temas" de la propia app."""
     __tablename__ = "themes"
 
     id = Column(Integer, primary_key=True, index=True)
     slug = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=False)
-    base = Column(String, default="light")     # tema base del que hereda (light/dark/htb)
-    vars = Column(JSON, default=dict)           # { "--rt-pageBg": "#fff", ... }
-    custom_css = Column(Text, default="")       # CSS libre del usuario (control total de estilos)
-    is_builtin = Column(Integer, default=0)     # 0 = personalizado, 1 = de fábrica
+    html_template = Column(Text, default="")   # plantilla del documento completo
+    custom_css = Column(Text, default="")      # CSS libre del usuario
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -158,8 +158,8 @@ class AppSettings(Base):
 
     id = Column(Integer, primary_key=True)
     lang = Column(String, default="es")
-    report_theme = Column(String, default="light")
-    pdf_print_theme = Column(String, default="light")
+    report_theme = Column(String, default="")      # slug del tema activo; "" = ninguno creado aún
+    pdf_print_theme = Column(String, default="")
     pdf_show_severity_bars = Column(Integer, default=1)  # 0/1
     pdf_content_width = Column(Integer, default=820)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

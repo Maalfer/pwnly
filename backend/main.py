@@ -651,11 +651,9 @@ def reorder_findings(report_id: int, finding_ids: List[int], db: Session = Depen
 
 
 # --------------------------------------------------------------------------- #
-# Temas de informe personalizados (estilos CSS)
+# Temas de informe: plantilla HTML + CSS creados íntegramente por el usuario
+# (no hay temas de fábrica; ver js/theme-engine.js para el motor de plantillas)
 # --------------------------------------------------------------------------- #
-_RESERVED_THEME_SLUGS = {"light", "dark", "htb"}
-
-
 @app.get("/api/themes", response_model=List[schemas.ThemeResponse])
 def list_themes(db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
     return db.query(models.Theme).order_by(models.Theme.id).all()
@@ -663,24 +661,21 @@ def list_themes(db: Session = Depends(get_db), _user: models.User = Depends(auth
 
 @app.post("/api/themes", response_model=schemas.ThemeResponse)
 def create_theme(payload: schemas.ThemeCreate, db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
-    if payload.slug in _RESERVED_THEME_SLUGS:
-        raise HTTPException(status_code=400, detail="Ese identificador está reservado para un tema de fábrica")
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="El nombre del tema no puede estar vacío")
 
     existing = db.query(models.Theme).filter(models.Theme.slug == payload.slug).first()
     if existing:
-        # Upsert: actualizar tema personalizado existente.
+        # Upsert: actualizar tema existente.
         existing.name = name
-        existing.base = payload.base
-        existing.vars = payload.vars
+        existing.html_template = payload.html_template
         existing.custom_css = payload.custom_css
         db.commit()
         db.refresh(existing)
         return existing
 
-    theme = models.Theme(slug=payload.slug, name=name, base=payload.base, vars=payload.vars, custom_css=payload.custom_css, is_builtin=0)
+    theme = models.Theme(slug=payload.slug, name=name, html_template=payload.html_template, custom_css=payload.custom_css)
     db.add(theme)
     db.commit()
     db.refresh(theme)
@@ -692,8 +687,6 @@ def delete_theme(theme_id: int, db: Session = Depends(get_db), _user: models.Use
     theme = db.query(models.Theme).filter(models.Theme.id == theme_id).first()
     if not theme:
         raise HTTPException(status_code=404, detail="Tema no encontrado")
-    if theme.is_builtin:
-        raise HTTPException(status_code=400, detail="No se puede eliminar un tema de fábrica")
     db.delete(theme)
     db.commit()
     return {"message": "Tema eliminado correctamente"}
@@ -1042,23 +1035,26 @@ def import_database(file: UploadFile = File(...), db: Session = Depends(get_db),
             _sanitize_json_column("reports", "client_logo", keep_slots=True)
             _sanitize_json_column("findings", "images", keep_slots=False)
 
-            # Saneamos las variables CSS de temas importados: se inyectan en un
-            # <style> del frontend, así que un .db malicioso podría colar CSS/HTML.
+            # Saneamos la plantilla HTML y el CSS de temas importados: se
+            # renderizan/inyectan en el navegador, así que un .db malicioso
+            # podría colar <script>/CSS peligroso.
             if "themes" in tables:
                 theme_cols = [r[1] for r in cursor.execute("PRAGMA table_info(themes)").fetchall()]
+                has_html = "html_template" in theme_cols
                 has_css = "custom_css" in theme_cols
-                sel = "SELECT id, vars" + (", custom_css" if has_css else "") + " FROM themes"
-                for row in cursor.execute(sel).fetchall():
-                    row_id, raw = row[0], row[1]
-                    try:
-                        parsed = json.loads(raw) if raw else {}
-                    except (TypeError, ValueError):
-                        parsed = {}
-                    cleaned = schemas._sanitize_theme_vars(parsed)
-                    cursor.execute("UPDATE themes SET vars = ? WHERE id = ?", (json.dumps(cleaned), row_id))
-                    if has_css:
-                        cursor.execute("UPDATE themes SET custom_css = ? WHERE id = ?",
-                                       (schemas.sanitize_css_source(row[2] or ""), row_id))
+                if has_html or has_css:
+                    cols = ["id"] + (["html_template"] if has_html else []) + (["custom_css"] if has_css else [])
+                    sel = f"SELECT {', '.join(cols)} FROM themes"
+                    for row in cursor.execute(sel).fetchall():
+                        row_id = row[0]
+                        i = 1
+                        if has_html:
+                            cursor.execute("UPDATE themes SET html_template = ? WHERE id = ?",
+                                           (schemas.sanitize_html_template(row[i] or ""), row_id))
+                            i += 1
+                        if has_css:
+                            cursor.execute("UPDATE themes SET custom_css = ? WHERE id = ?",
+                                           (schemas.sanitize_css_source(row[i] or ""), row_id))
 
             # Normalizamos la tabla 'users' importada: descartamos cuentas cuyo
             # hash de contraseña no tenga el formato PBKDF2 esperado. Un .db

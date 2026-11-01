@@ -1,5 +1,5 @@
 """Tests for the professional-report features added in v1.2.0:
-custom CSS themes, user finding templates, and the extended report/finding fields.
+custom HTML/CSS themes, user finding templates, and the extended report/finding fields.
 """
 
 
@@ -8,39 +8,33 @@ class TestThemes:
         payload = {
             "slug": "midnight",
             "name": "Midnight",
-            "base": "dark",
-            "vars": {"--rt-pageBg": "#000000", "--rt-textHeading": "#9fef00"},
+            "html_template": "<div>{{document_title}}</div>",
+            "custom_css": "body { background: #000; }",
         }
         r = client.post("/api/themes", json=payload)
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["slug"] == "midnight"
-        assert data["vars"]["--rt-pageBg"] == "#000000"
-        assert data["is_builtin"] == 0
+        assert data["html_template"] == "<div>{{document_title}}</div>"
+        assert data["custom_css"] == "body { background: #000; }"
 
         lst = client.get("/api/themes").json()
         assert any(t["slug"] == "midnight" for t in lst)
 
-    def test_reserved_slug_rejected(self, client):
-        r = client.post("/api/themes", json={"slug": "dark", "name": "X", "vars": {}})
-        assert r.status_code == 400
-
     def test_invalid_slug_rejected(self, client):
-        r = client.post("/api/themes", json={"slug": "Bad Slug!", "name": "X", "vars": {}})
+        r = client.post("/api/themes", json={"slug": "Bad Slug!", "name": "X"})
         assert r.status_code == 422
 
-    def test_css_injection_sanitized(self, client):
-        payload = {
-            "slug": "evil",
-            "name": "Evil",
-            "vars": {
-                "--rt-pageBg": "#fff",
-                "--rt-bad": "red; } body { display:none }",  # value rechazado
-                "background": "url(http://evil)",            # clave fuera de namespace
-            },
-        }
-        data = client.post("/api/themes", json=payload).json()
-        assert data["vars"] == {"--rt-pageBg": "#fff"}
+    def test_html_template_script_stripped(self, client):
+        html = '<div onclick="evil()">hi</div><script>alert(1)</script><a href="javascript:evil()">x</a>'
+        data = client.post("/api/themes", json={
+            "slug": "evil", "name": "Evil", "html_template": html,
+        }).json()
+        out = data["html_template"]
+        assert "<script>" not in out
+        assert "onclick=" not in out
+        assert "javascript:" not in out
+        assert "<div" in out and "hi</div>" in out  # el resto del markup se conserva
 
     def test_custom_css_saved_and_sanitized(self, client):
         css = (
@@ -52,7 +46,7 @@ class TestThemes:
             ".z { behavior: url(#default); width: expression(alert(1)); }"
         )
         data = client.post("/api/themes", json={
-            "slug": "css-theme", "name": "CSS", "vars": {}, "custom_css": css
+            "slug": "css-theme", "name": "CSS", "custom_css": css
         }).json()
         out = data["custom_css"]
         assert ".finding-preview h3 { color: #08c; }" in out
@@ -64,14 +58,15 @@ class TestThemes:
         assert "behavior:" not in out
 
     def test_upsert_same_slug(self, client):
-        client.post("/api/themes", json={"slug": "t1", "name": "A", "vars": {}})
-        client.post("/api/themes", json={"slug": "t1", "name": "B", "vars": {"--rt-pageBg": "#111"}})
+        client.post("/api/themes", json={"slug": "t1", "name": "A"})
+        client.post("/api/themes", json={"slug": "t1", "name": "B", "html_template": "<p>B</p>"})
         themes = [t for t in client.get("/api/themes").json() if t["slug"] == "t1"]
         assert len(themes) == 1
         assert themes[0]["name"] == "B"
+        assert themes[0]["html_template"] == "<p>B</p>"
 
     def test_delete_theme(self, client):
-        tid = client.post("/api/themes", json={"slug": "tmp", "name": "Tmp", "vars": {}}).json()["id"]
+        tid = client.post("/api/themes", json={"slug": "tmp", "name": "Tmp"}).json()["id"]
         assert client.delete(f"/api/themes/{tid}").status_code == 200
         assert all(t["id"] != tid for t in client.get("/api/themes").json())
 

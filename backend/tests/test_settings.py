@@ -17,8 +17,8 @@ class TestAppSettings:
         """PUT /api/settings guarda y un GET posterior lo refleja."""
         payload = {
             "lang": "en",
-            "report_theme": "htb",
-            "pdf_print_theme": "dark",
+            "report_theme": "my-theme",
+            "pdf_print_theme": "my-theme",
             "pdf_show_severity_bars": False,
             "pdf_content_width": 1000,
         }
@@ -33,8 +33,8 @@ class TestAppSettings:
         """Un idioma no soportado se normaliza a 'es'."""
         client.put("/api/settings", json={
             "lang": "fr",
-            "report_theme": "light",
-            "pdf_print_theme": "light",
+            "report_theme": "",
+            "pdf_print_theme": "",
             "pdf_show_severity_bars": True,
             "pdf_content_width": 820,
         })
@@ -44,8 +44,8 @@ class TestAppSettings:
         """El ancho de contenido se acota a un rango razonable."""
         client.put("/api/settings", json={
             "lang": "es",
-            "report_theme": "light",
-            "pdf_print_theme": "light",
+            "report_theme": "",
+            "pdf_print_theme": "",
             "pdf_show_severity_bars": True,
             "pdf_content_width": 99999,
         })

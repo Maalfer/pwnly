@@ -19,6 +19,7 @@ def run_migrations(engine):
     _migrate_create_api_keys(engine)
     _migrate_add_image_captions(engine)
     _migrate_add_indexes(engine)
+    _migrate_add_theme_html_template(engine)
 
 
 def _add_columns(engine, table, columns):
@@ -210,6 +211,26 @@ def _migrate_add_indexes(engine):
             conn.commit()
     except Exception as e:
         print(f"⚠️  Migración índices: {e}")
+
+
+def _migrate_add_theme_html_template(engine):
+    """Migration: columna html_template en themes (plantilla HTML del tema).
+
+    Los temas dejaron de tener paleta de variables + base de fábrica: ahora
+    son una plantilla HTML + CSS libre creadas por el usuario (ver
+    js/theme-engine.js). Las columnas antiguas (base, vars, is_builtin) se
+    quedan huérfanas en BDs existentes sin efecto: el modelo ya no las usa.
+    """
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(themes)"))
+            existing = [row[1] for row in result]
+            if existing and 'html_template' not in existing:
+                conn.execute(text("ALTER TABLE themes ADD COLUMN html_template TEXT DEFAULT ''"))
+                conn.commit()
+                print("✅ Columna html_template agregada a themes")
+    except Exception as e:
+        print(f"⚠️  Migración html_template: {e}")
 
 
 def _migrate_create_api_keys(engine):

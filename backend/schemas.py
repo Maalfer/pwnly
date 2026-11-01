@@ -284,35 +284,11 @@ class ReportList(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# Temas de informe (estilos CSS personalizables)
+# Temas de informe (plantilla HTML + CSS creados íntegramente por el usuario)
 # --------------------------------------------------------------------------- #
-# Slug seguro: se inserta en un selector CSS [data-rt-theme="..."], así que sólo
-# permitimos caracteres inertes para cerrar la inyección de CSS/HTML.
+# Slug seguro: se usa como identificador del tema (y en nombres de fichero al
+# exportar), así que sólo permitimos caracteres inertes.
 _SLUG_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,48}$')
-
-# Valor de variable CSS: rechazamos llaves, punto y coma, dos puntos extra y
-# secuencias que permitan salir del valor de la propiedad o inyectar reglas.
-_CSS_VALUE_RE = re.compile(r'^[#a-zA-Z0-9 ,.\-%()]{0,120}$')
-
-
-def _sanitize_theme_vars(vars_dict) -> dict:
-    if not isinstance(vars_dict, dict):
-        return {}
-    clean = {}
-    for k, v in vars_dict.items():
-        if not isinstance(k, str) or not isinstance(v, str):
-            continue
-        k = k.strip()
-        v = v.strip()
-        # Las claves deben ser variables CSS de nuestro espacio de nombres.
-        if not re.match(r'^--rt-[a-zA-Z0-9-]{1,40}$', k):
-            continue
-        if not _CSS_VALUE_RE.match(v):
-            continue
-        clean[k] = v
-        if len(clean) >= 80:
-            break
-    return clean
 
 
 def _decode_css_escapes(css: str) -> str:
@@ -361,11 +337,34 @@ def sanitize_css_source(css) -> str:
     return css
 
 
+def sanitize_html_template(html) -> str:
+    """Sanea la plantilla HTML libre del tema (motor {{variable}}/{{#each}}/{{#if}}
+    sobre los datos del reporte, ver js/theme-engine.js).
+
+    El usuario tiene control total de la maquetación, pero la plantilla puede
+    acabar en un informe HTML autocontenido abierto por un tercero (el
+    cliente de la auditoría), así que quitamos lo ejecutable: <script>,
+    atributos de evento (onClick=...) y URIs javascript:/vbscript:. El motor
+    de plantillas procesa el texto ya saneado, así que los tokens {{...}} no
+    se ven afectados por nada de esto.
+    """
+    if not isinstance(html, str):
+        return ''
+    html = html[:200000]
+    html = re.sub(r'<script\b[^>]*>.*?</script\s*>', '', html, flags=re.IGNORECASE | re.DOTALL)
+    html = re.sub(r'<script\b[^>]*/?>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'\son[a-zA-Z]+\s*=\s*"[^"]*"', '', html, flags=re.IGNORECASE)
+    html = re.sub(r"\son[a-zA-Z]+\s*=\s*'[^']*'", '', html, flags=re.IGNORECASE)
+    html = re.sub(r'\son[a-zA-Z]+\s*=\s*[^\s>]+', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'(href|src)\s*=\s*"(\s*(javascript|vbscript)\s*:[^"]*)"', r'\1="#"', html, flags=re.IGNORECASE)
+    html = re.sub(r"(href|src)\s*=\s*'(\s*(javascript|vbscript)\s*:[^']*)'", r"\1='#'", html, flags=re.IGNORECASE)
+    return html
+
+
 class ThemeBase(BaseModel):
     slug: str
     name: str
-    base: str = "light"
-    vars: dict = {}
+    html_template: str = ""
     custom_css: str = ""
 
     @field_validator('slug')
@@ -376,15 +375,10 @@ class ThemeBase(BaseModel):
             raise ValueError('Slug inválido (solo minúsculas, números y guiones)')
         return v
 
-    @field_validator('base')
+    @field_validator('html_template')
     @classmethod
-    def _valid_base(cls, v):
-        return v if v in ('light', 'dark', 'htb') else 'light'
-
-    @field_validator('vars')
-    @classmethod
-    def _clean_vars(cls, v):
-        return _sanitize_theme_vars(v)
+    def _clean_html(cls, v):
+        return sanitize_html_template(v)
 
     @field_validator('custom_css')
     @classmethod
@@ -398,7 +392,6 @@ class ThemeCreate(ThemeBase):
 
 class ThemeResponse(ThemeBase):
     id: int
-    is_builtin: int = 0
 
     class Config:
         from_attributes = True
@@ -451,8 +444,8 @@ class FindingTemplateResponse(FindingTemplateBase):
 
 class AppSettingsBase(BaseModel):
     lang: str = "es"
-    report_theme: str = "light"
-    pdf_print_theme: str = "light"
+    report_theme: str = ""
+    pdf_print_theme: str = ""
     pdf_show_severity_bars: bool = True
     pdf_content_width: int = 820
 
