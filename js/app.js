@@ -1883,8 +1883,20 @@ function listAllThemes() {
     return (state.customThemes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Tema implícito usado mientras el usuario no haya creado ninguno propio (o
+// el seleccionado ya no exista): así el informe siempre se puede generar,
+// sin bloquear al usuario con una pantalla vacía. No aparece en "Temas" como
+// tarjeta seleccionable ni se guarda en BD: es sólo un valor de reserva.
+const DEFAULT_FALLBACK_THEME = { slug: '', name: 'Por defecto', html_template: '', custom_css: '' };
+
 function getActiveTheme() {
-    return (state.customThemes || []).find(t => t.slug === state.reportTheme) || null;
+    const found = (state.customThemes || []).find(t => t.slug === state.reportTheme);
+    if (found) return found;
+    return {
+        ...DEFAULT_FALLBACK_THEME,
+        html_template: DEFAULT_THEME_TEMPLATE_HTML,
+        custom_css: DEFAULT_THEME_TEMPLATE_CSS
+    };
 }
 
 // Inyecta SOLO el CSS del tema activo (no todos a la vez: cada tema es CSS
@@ -2676,19 +2688,6 @@ function renderPreview() {
     const _cw = state.pdfContentWidth || 820;
     const theme = getActiveTheme();
 
-    if (!theme) {
-        return `
-            <div class="preview-container preview-empty" style="max-width:${_cw}px;">
-                <div class="empty-state">
-                    <p>${isEs ? 'Todavía no tienes ningún tema creado.' : "You don't have any theme yet."}</p>
-                    <p class="text-muted">${isEs
-                        ? 'Ve a "Temas" para crear el tuyo (HTML + CSS) y poder generar el informe.'
-                        : 'Go to "Themes" to create yours (HTML + CSS) so you can generate the report.'}</p>
-                    <button class="btn-primary" onclick="hideReports(); showThemesPage();">${isEs ? 'Ir a Temas' : 'Go to Themes'}</button>
-                </div>
-            </div>`;
-    }
-
     const ctx = buildReportContext();
     let bodyHtml;
     try {
@@ -2954,7 +2953,7 @@ function renderPdfModal() {
                         <div>
                             <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:${c.textMuted};margin-bottom:0.625rem;">${t.pdfModalTheme}</p>
                             ${themes.length === 0 ? `
-                                <p style="font-size:0.8rem;color:${c.textFaint};margin:0;">${isEs ? 'Crea un tema en "Temas" primero.' : 'Create a theme in "Themes" first.'}</p>
+                                <p style="font-size:0.8rem;color:${c.textFaint};margin:0;">${isEs ? 'Usando el tema por defecto. Crea el tuyo en "Temas" para personalizarlo.' : 'Using the default theme. Create your own in "Themes" to customize it.'}</p>
                             ` : `
                                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                                     ${themes.map(themeCard).join('')}
