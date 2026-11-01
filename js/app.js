@@ -2763,7 +2763,7 @@ function renderPreview() {
                                 <div style="font-size:0.95rem;font-weight:600;letter-spacing:0.45em;color:#f87171;text-transform:uppercase;padding-left:0.45em;">Red Team</div>
                             </div>
                         ` : `
-                            <div style="width:160px; height:160px; background:linear-gradient(135deg,#2563eb,#1e40af); border-radius:32px; display:flex; align-items:center; justify-content:center; box-shadow:0 15px 40px rgba(37,99,235,0.3);">
+                            <div style="width:160px; height:160px; background:#2563eb; border-radius:32px; display:flex; align-items:center; justify-content:center; box-shadow:0 15px 40px rgba(37,99,235,0.3);">
                                 <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
                             </div>
                         `}
