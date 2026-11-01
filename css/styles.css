@@ -5278,18 +5278,29 @@ button {
 /* ============================================================= */
 /* Footer "hecho con ❤️ por ..." en la página de Mis Reportes */
 .made-by-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 0.32rem;
-    margin: 3.5rem auto 1.5rem;
-    padding-top: 1.75rem;
+    margin: 0;
+    padding: 0.75rem 1rem;
     border-top: 1px solid #e5e7eb;
-    max-width: 540px;
+    max-width: none;
     font-size: 0.9rem;
     color: #64748b;
     letter-spacing: 0.01em;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    z-index: 40;
+}
+
+.reports-page {
+    padding-bottom: 4.5rem;
 }
 
 .made-by-heart {
@@ -5320,7 +5331,7 @@ button {
 }
 
 [data-theme="dark"] .made-by-footer,
-[data-theme="htb"] .made-by-footer { border-top-color: rgba(255,255,255,0.1) !important; color: #94a3b8 !important; }
+[data-theme="htb"] .made-by-footer { border-top-color: rgba(255,255,255,0.1) !important; color: #94a3b8 !important; background: rgba(15, 23, 42, 0.92) !important; }
 [data-theme="dark"] .made-by-footer a { color: #60a5fa !important; }
 [data-theme="htb"] .made-by-footer a { color: #9fef00 !important; }
 
