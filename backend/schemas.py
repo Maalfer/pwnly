@@ -141,6 +141,54 @@ class FindingUpdate(FindingBase):
     pass
 
 
+class FindingPatch(BaseModel):
+    """Actualización parcial de un hallazgo (solo los campos enviados).
+
+    La API REST expone PATCH para que scripts e integraciones puedan modificar
+    un único campo (p. ej. el estado de remediación) sin reenviar el hallazgo
+    completo ni resetear los campos omitidos.
+    """
+    template_key: Optional[str] = None
+    title: Optional[str] = None
+    severity: Optional[str] = None
+    description: Optional[str] = None
+    cvss: Optional[str] = None
+    cvss_vector: Optional[str] = None
+    poc: Optional[str] = None
+    exploit: Optional[str] = None
+    impact: Optional[str] = None
+    remediation: Optional[str] = None
+    reference: Optional[str] = None
+    references: Optional[List[str]] = None
+    cve: Optional[str] = None
+    cwe: Optional[str] = None
+    status: Optional[str] = None
+    affected_assets: Optional[str] = None
+    likelihood: Optional[str] = None
+    impact_rating: Optional[str] = None
+    owasp: Optional[str] = None
+    compliance: Optional[List[str]] = None
+    retest_notes: Optional[str] = None
+    fields_visibility: Optional[dict] = None
+    images: Optional[List[str]] = None
+    order_index: Optional[int] = None
+
+    @field_validator('severity')
+    @classmethod
+    def _sanitize_severity(cls, v):
+        return sanitize_severity(v) if v is not None else v
+
+    @field_validator('images')
+    @classmethod
+    def _sanitize_images(cls, v):
+        return sanitize_image_list(v) if v is not None else v
+
+    @field_validator('references', 'compliance')
+    @classmethod
+    def _sanitize_str_lists(cls, v):
+        return _clean_str_list(v) if v is not None else v
+
+
 class FindingResponse(FindingBase):
     id: int
     report_id: int
@@ -431,10 +479,10 @@ class AppSettingsResponse(AppSettingsBase):
 
 
 # --------------------------------------------------------------------------- #
-# API Keys (acceso programático para agentes IA / MCP)
+# API Keys (acceso programático a la API REST)
 # --------------------------------------------------------------------------- #
 class ApiKeyCreate(BaseModel):
-    label: str = "Agent Key"
+    label: str = "API Key"
 
 
 class ApiKeyInfo(BaseModel):

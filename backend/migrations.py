@@ -205,7 +205,7 @@ def _migrate_add_indexes(engine):
 
 
 def _migrate_create_api_keys(engine):
-    """Migration: crea la tabla api_keys para acceso programático (agentes IA / MCP)."""
+    """Migration: crea la tabla api_keys para acceso programático a la API REST."""
     try:
         with engine.connect() as conn:
             conn.execute(text("""

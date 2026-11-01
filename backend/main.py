@@ -15,7 +15,7 @@ import threading
 import time as _time
 from datetime import datetime
 import models, schemas, database, auth
-from database import engine, get_db, db_path, SessionLocal
+from database import engine, get_db, db_path
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not os.path.exists(os.path.join(BASE_DIR, "index.html")):
@@ -30,42 +30,6 @@ run_migrations(engine)
 # vacía de usuarios y el frontend muestra la configuración inicial para crear la
 # primera cuenta (ver /api/auth/needs-setup y /api/auth/setup).
 
-# --------------------------------------------------------------------------- #
-# MCP sobre HTTP (streamable-http) montado en el MISMO proceso y puerto.
-# Permite conectar agentes remotos (Claude Code / Desktop) a https://host/mcp
-# sin ejecutar nada en local: cada cliente envía su API key en la cabecera
-# `Authorization: Bearer pwn_...`. Se activa salvo que PWNLY_MCP_HTTP=0.
-# Requiere el paquete 'mcp' (Python >= 3.10); si no está disponible (p. ej. en
-# un Python 3.9 de desarrollo), se omite silenciosamente y el API arranca igual.
-# --------------------------------------------------------------------------- #
-_mcp_enabled = False
-_mcp_lifespan = None
-if os.environ.get("PWNLY_MCP_HTTP", "1") != "0":
-    try:
-        from contextlib import asynccontextmanager
-        import mcp_server
-
-        # El sub-app sirve el endpoint en su raíz para que, montado en "/mcp",
-        # la ruta externa sea exactamente "/mcp".
-        mcp_server.mcp.settings.streamable_http_path = "/"
-
-        @asynccontextmanager
-        async def _mcp_lifespan(_app):
-            # El session manager del transporte streamable-http debe arrancarse
-            # en el lifespan del proceso anfitrión (los sub-apps montados no
-            # reciben los eventos de lifespan por sí solos).
-            async with mcp_server.mcp.session_manager.run():
-                yield
-
-        _mcp_enabled = True
-    except (Exception, SystemExit) as _mcp_err:  # pragma: no cover
-        # SystemExit incluido a propósito: mcp_server.py hace sys.exit(1) cuando
-        # falta el paquete 'mcp' (Python < 3.10), y al ser BaseException escaparía
-        # de "except Exception" y tumbaría toda la app. MCP es opcional, así que
-        # aquí degradamos con elegancia y dejamos el API funcionando igualmente.
-        print(f"[Pwnly] MCP HTTP deshabilitado: {_mcp_err}", file=sys.stderr)
-        _mcp_lifespan = None
-
 # Documentación interactiva (Swagger/ReDoc/OpenAPI) DESACTIVADA por defecto:
 # expone públicamente todo el mapa de la API a un atacante anónimo. Se puede
 # reactivar en entornos de desarrollo con ENABLE_DOCS=1.
@@ -74,8 +38,7 @@ _enable_docs = os.environ.get("ENABLE_DOCS", "0") == "1"
 app = FastAPI(
     title="Pwnly API",
     description="API para gestión de reportes de pentesting",
-    version="2.3.2",
-    lifespan=_mcp_lifespan,
+    version="2.4.0",
     docs_url="/docs" if _enable_docs else None,
     redoc_url="/redoc" if _enable_docs else None,
     openapi_url="/openapi.json" if _enable_docs else None,
@@ -97,34 +60,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
 # Compresión GZip: el frontend son ficheros grandes (js/app.js ~290 KB,
 # css/styles.css ~130 KB, js/plantillas.json ~60 KB) y las respuestas JSON del
 # API pueden ser voluminosas (un informe con muchos hallazgos e imágenes). Con
-# gzip esos payloads bajan ~70-80 %, acelerando notablemente la carga. Se aplica
-# a TODO salvo al transporte MCP (/mcp), cuyas respuestas SSE se emiten en
-# streaming y no deben bufferizarse/recomprimirse.
+# gzip esos payloads bajan ~70-80 %, acelerando notablemente la carga.
 from starlette.middleware.gzip import GZipMiddleware
 
-
-class SmartGZipMiddleware:
-    """GZip para todo el tráfico HTTP excepto el endpoint MCP (streaming SSE)."""
-
-    def __init__(self, app, minimum_size: int = 500):
-        self.app = app
-        self._gzip = GZipMiddleware(app, minimum_size=minimum_size)
-
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") == "http" and not scope.get("path", "").startswith("/mcp"):
-            await self._gzip(scope, receive, send)
-        else:
-            await self.app(scope, receive, send)
-
-
-app.add_middleware(SmartGZipMiddleware, minimum_size=500)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # --------------------------------------------------------------------------- #
@@ -175,58 +121,10 @@ app.mount("/css", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "css")), n
 app.mount("/js", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "js")), name="js")
 app.mount("/assets", NoCacheStaticFiles(directory=os.path.join(BASE_DIR, "assets")), name="assets")
 
-class MCPAuthGate:
-    """Verja ASGI delante del endpoint MCP montado.
-
-    Exige una API key `pwn_...` válida en CADA petición — incluido el handshake
-    (initialize / tools/list) — antes de pasar al sub-app del MCP. Sin esto, un
-    cliente anónimo podía conectar y enumerar las herramientas e instrucciones
-    del servidor (fuga de superficie). El acceso a los datos ya requería la key
-    al reenviarse al API REST; ahora la propia conexión MCP también la exige.
-    """
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") != "http":
-            await self.app(scope, receive, send)
-            return
-
-        headers = dict(scope.get("headers") or [])
-        auth_header = headers.get(b"authorization", b"").decode("latin-1")
-        token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
-
-        authorized = False
-        if token.startswith(auth.API_KEY_PREFIX):
-            _db = SessionLocal()
-            try:
-                authorized = auth.verify_api_key(token, _db) is not None
-            finally:
-                _db.close()
-
-        if not authorized:
-            response = JSONResponse(
-                {"detail": "API key requerida o inválida"},
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-            await response(scope, receive, send)
-            return
-
-        await self.app(scope, receive, send)
-
-
-# Endpoint MCP (streamable-http) en /mcp — ver bloque de configuración arriba.
-# Se monta detrás de MCPAuthGate para que ninguna petición anónima alcance el
-# transporte MCP.
-if _mcp_enabled:
-    app.mount("/mcp", MCPAuthGate(mcp_server.mcp.streamable_http_app()))
-
 
 @app.get("/api")
 def api_info():
-    return {"message": "Pwnly API", "version": "2.3.2"}
+    return {"message": "Pwnly API", "version": "2.4.0"}
 
 
 @app.get("/")
@@ -615,6 +513,14 @@ def get_findings(report_id: int, db: Session = Depends(get_db), _user: models.Us
     return findings
 
 
+@app.get("/api/findings/{finding_id}", response_model=schemas.FindingResponse)
+def get_finding(finding_id: int, db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
+    finding = db.query(models.Finding).filter(models.Finding.id == finding_id).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
+    return finding
+
+
 @app.post("/api/reports/{report_id}/findings", response_model=schemas.FindingResponse)
 def create_finding(report_id: int, finding: schemas.FindingCreate, db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
     report = db.query(models.Report).filter(models.Report.id == report_id).first()
@@ -632,6 +538,46 @@ def create_finding(report_id: int, finding: schemas.FindingCreate, db: Session =
     return db_finding
 
 
+@app.post("/api/reports/{report_id}/findings/bulk", response_model=List[schemas.FindingResponse])
+def create_findings_bulk(
+    report_id: int,
+    findings: List[schemas.FindingCreate],
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(auth.require_auth),
+):
+    """Crea varios hallazgos en una sola llamada (importaciones y scripts).
+
+    Los hallazgos se añaden al final del reporte conservando el orden de la
+    lista enviada, sin necesidad de calcular `order_index` desde el cliente.
+    """
+    report = db.query(models.Report).filter(models.Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+    last_order = db.query(func.max(models.Finding.order_index)).filter(
+        models.Finding.report_id == report_id
+    ).scalar()
+    next_order = 0 if last_order is None else last_order + 1
+
+    created = []
+    try:
+        for offset, finding in enumerate(findings):
+            db_finding = models.Finding(
+                **finding.model_dump(exclude={'order_index'}),
+                report_id=report_id,
+                order_index=next_order + offset,
+            )
+            db.add(db_finding)
+            created.append(db_finding)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    for db_finding in created:
+        db.refresh(db_finding)
+    return created
+
+
 @app.put("/api/findings/{finding_id}", response_model=schemas.FindingResponse)
 def update_finding(finding_id: int, finding: schemas.FindingUpdate, db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
     db_finding = db.query(models.Finding).filter(models.Finding.id == finding_id).first()
@@ -641,6 +587,25 @@ def update_finding(finding_id: int, finding: schemas.FindingUpdate, db: Session 
     for key, value in finding.model_dump().items():
         setattr(db_finding, key, value)
     
+    db.commit()
+    db.refresh(db_finding)
+    return db_finding
+
+
+@app.patch("/api/findings/{finding_id}", response_model=schemas.FindingResponse)
+def patch_finding(finding_id: int, finding: schemas.FindingPatch, db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
+    """Actualiza solo los campos enviados, sin resetear el resto del hallazgo."""
+    db_finding = db.query(models.Finding).filter(models.Finding.id == finding_id).first()
+    if not db_finding:
+        raise HTTPException(status_code=404, detail="Hallazgo no encontrado")
+
+    data = finding.model_dump(exclude_unset=True)
+    if "title" in data and not (data["title"] or "").strip():
+        raise HTTPException(status_code=422, detail="El título no puede quedar vacío")
+
+    for key, value in data.items():
+        setattr(db_finding, key, value)
+
     db.commit()
     db.refresh(db_finding)
     return db_finding
@@ -1153,7 +1118,7 @@ def import_database(file: UploadFile = File(...), db: Session = Depends(get_db),
 
 
 # --------------------------------------------------------------------------- #
-# API Keys (acceso programático para agentes IA / MCP)
+# API Keys (acceso programático a la API REST)
 # --------------------------------------------------------------------------- #
 @app.get("/api/api-keys", response_model=List[schemas.ApiKeyInfo])
 def list_api_keys(
@@ -1174,7 +1139,7 @@ def create_api_key(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.require_auth),
 ):
-    label = (payload.label or "").strip() or "Agent Key"
+    label = (payload.label or "").strip() or "API Key"
     # Generamos el secreto: "pwn_" + 43 chars base64url (32 bytes de entropía)
     raw_key = f"{auth.API_KEY_PREFIX}{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
@@ -1216,54 +1181,6 @@ def delete_api_key(
     db.delete(api_key)
     db.commit()
     return {"message": "API key revocada correctamente"}
-
-
-@app.get("/api/mcp-config")
-def get_mcp_config(_user: models.User = Depends(auth.require_auth)):
-    """Devuelve la ruta al mcp_server.py y el ejecutable de Python adecuado para el servidor MCP."""
-    mcp_server_path = os.path.join(BASE_DIR, "backend", "mcp_server.py")
-
-    # El paquete 'mcp' requiere Python ≥ 3.10. Buscamos el mejor ejecutable disponible.
-    # Primero probamos el Python del propio proceso; si tiene mcp, perfecto. Si no,
-    # buscamos alternativas comunes en el sistema (Homebrew, pyenv, venvs...).
-    def _has_mcp(python_bin: str) -> bool:
-        try:
-            import subprocess
-            r = subprocess.run(
-                [python_bin, "-c", "import mcp"],
-                capture_output=True, timeout=5
-            )
-            return r.returncode == 0
-        except Exception:
-            return False
-
-    candidates = [
-        sys.executable,
-        "/opt/homebrew/bin/python3.12",
-        "/opt/homebrew/bin/python3.13",
-        "/opt/homebrew/bin/python3.14",
-        "/opt/homebrew/bin/python3.10",
-        "/opt/homebrew/bin/python3.11",
-        "python3.12", "python3.11", "python3.10",
-        "python3", "python",
-    ]
-    python_executable = sys.executable  # fallback
-    mcp_available = False
-    for candidate in candidates:
-        if _has_mcp(candidate):
-            python_executable = candidate
-            mcp_available = True
-            break
-
-    return {
-        "mcp_server_path": mcp_server_path,
-        "python_executable": python_executable,
-        "mcp_available": mcp_available,
-        "install_hint": (
-            "pip install 'mcp>=1.0'  # requiere Python ≥ 3.10"
-            if not mcp_available else None
-        ),
-    }
 
 
 if __name__ == "__main__":

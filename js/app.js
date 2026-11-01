@@ -117,14 +117,11 @@ const state = {
     users: [],
     userMgmtError: '',
     userMgmtSuccess: '',
-    // MCP / Agentes IA
+    // API / Integraciones
     apiKeys: [],
-    mcpNewKey: null,
-    mcpKeyLabel: '',
-    mcpError: '',
-    mcpServerPath: '',
-    mcpPythonExec: 'python3',
-    mcpAvailable: null
+    apiNewKey: null,
+    apiKeyLabel: '',
+    apiError: ''
 };
 
 const UI = {
@@ -301,31 +298,47 @@ const UI = {
         youLabel: 'tú',
         noUsers: 'No hay usuarios registrados',
         confirmDeleteUser: '¿Eliminar al usuario',
-        mcpTitle: 'MCP / Agentes IA',
-        mcpSubtitle: 'Permite que Claude y otros agentes de IA creen reportes directamente en Pwnly',
-        mcpApiKeysTitle: 'API Keys',
-        mcpApiKeysDesc: 'Genera claves de larga duración para que los agentes se autentiquen en la API de Pwnly',
-        mcpNoKeys: 'No hay API keys generadas',
-        mcpGenerateKey: 'Generar nueva API Key',
-        mcpKeyLabelField: 'Etiqueta',
-        mcpKeyLabelPlaceholder: 'p.ej. "Claude Desktop"',
-        mcpGenerate: 'Generar',
-        mcpGenerating: 'Generando...',
-        mcpRevoke: 'Revocar',
-        mcpRevokeConfirm: '¿Revocar esta API key? Los agentes que la usen dejarán de funcionar.',
-        mcpNewKeyWarning: 'Copia esta clave ahora. No se volverá a mostrar.',
-        mcpConfigTitle: 'Configuración para Claude Desktop',
-        mcpConfigDesc: 'Pega este bloque en tu archivo claude_desktop_config.json (en la sección "mcpServers"):',
-        mcpCliTitle: 'Claude Code CLI (local / stdio)',
-        mcpCliDesc: 'Para usar con Claude Code CLI en local, establece estas variables antes de lanzar el servidor:',
-        mcpRemoteTitle: 'Conexión remota por HTTP (servidor en un VPS)',
-        mcpRemoteDesc: 'Si Pwnly corre en un servidor remoto, conéctate desde Claude Code sin ejecutar nada en local (la API key viaja en la cabecera de cada petición):',
-        mcpCopy: 'Copiar',
-        mcpCopied: '¡Copiado!',
-        mcpCreatedAt: 'Creada',
-        mcpLastUsed: 'Último uso',
-        mcpNeverUsed: 'Sin usar',
-        mcpError: 'Error al gestionar las API keys'
+        apiTitle: 'API / Integraciones',
+        apiSubtitle: 'Gestiona reportes y hallazgos desde scripts, CI o cualquier cliente HTTP',
+        apiKeysTitle: 'API Keys',
+        apiKeysDesc: 'Claves de larga duración para autenticar peticiones a la API REST de Pwnly',
+        apiNoKeys: 'No hay API keys generadas',
+        apiGenerateKey: 'Generar nueva API Key',
+        apiKeyLabelField: 'Etiqueta',
+        apiKeyLabelPlaceholder: 'p.ej. "Script de importación"',
+        apiGenerate: 'Generar',
+        apiGenerating: 'Generando...',
+        apiRevoke: 'Revocar',
+        apiRevokeConfirm: '¿Revocar esta API key? Los scripts e integraciones que la usen dejarán de funcionar.',
+        apiNewKeyWarning: 'Copia esta clave ahora. No se volverá a mostrar.',
+        apiCopy: 'Copiar',
+        apiCopied: '¡Copiado!',
+        apiCreatedAt: 'Creada',
+        apiLastUsed: 'Último uso',
+        apiNeverUsed: 'Sin usar',
+        apiError: 'Error al gestionar las API keys',
+        apiUsageTitle: 'Cómo usar la API',
+        apiUsageDesc: 'La API REST usa JSON y está disponible en este mismo dominio. Los hallazgos siempre pertenecen a un reporte.',
+        apiAuthTitle: 'Autenticación',
+        apiAuthDesc: 'Envía tu API key en la cabecera Authorization de cada petición:',
+        apiBaseUrlLabel: 'URL base',
+        apiAuthHeaderLabel: 'Cabecera',
+        apiEndpointsTitle: 'Endpoints de hallazgos',
+        apiEndpointsDesc: 'Referencia rápida para automatizar la gestión de hallazgos.',
+        apiMethod: 'Método',
+        apiEndpoint: 'Endpoint',
+        apiDescription: 'Descripción',
+        apiListReports: 'Listar reportes',
+        apiCreateReport: 'Crear reporte',
+        apiListFindings: 'Listar hallazgos de un reporte',
+        apiGetFinding: 'Obtener un hallazgo',
+        apiCreateFinding: 'Crear hallazgo',
+        apiBulkFindings: 'Crear hallazgos en lote',
+        apiPatchFinding: 'Actualizar hallazgo (parcial)',
+        apiDeleteFinding: 'Eliminar hallazgo',
+        apiExampleTitle: 'Ejemplo rápido',
+        apiExampleDesc: 'Crea un reporte y añade un hallazgo con cURL:',
+        apiDocsHint: 'Documentación completa en docs/API.md del repositorio.'
     },
     en: {
         appTitle: 'Pwnly',
@@ -500,31 +513,47 @@ const UI = {
         youLabel: 'you',
         noUsers: 'No users registered',
         confirmDeleteUser: 'Delete user',
-        mcpTitle: 'MCP / AI Agent Integration',
-        mcpSubtitle: 'Let Claude and other AI agents create reports directly in Pwnly',
-        mcpApiKeysTitle: 'API Keys',
-        mcpApiKeysDesc: 'Generate long-lived keys for agents to authenticate against the Pwnly API',
-        mcpNoKeys: 'No API keys generated yet',
-        mcpGenerateKey: 'Generate new API Key',
-        mcpKeyLabelField: 'Label',
-        mcpKeyLabelPlaceholder: 'e.g. "Claude Desktop"',
-        mcpGenerate: 'Generate',
-        mcpGenerating: 'Generating...',
-        mcpRevoke: 'Revoke',
-        mcpRevokeConfirm: 'Revoke this API key? Agents using it will stop working.',
-        mcpNewKeyWarning: 'Copy this key now. It will not be shown again.',
-        mcpConfigTitle: 'Claude Desktop Configuration',
-        mcpConfigDesc: 'Paste this block into your claude_desktop_config.json (under "mcpServers"):',
-        mcpCliTitle: 'Claude Code CLI (local / stdio)',
-        mcpCliDesc: 'To use with Claude Code CLI locally, set these environment variables before launching the server:',
-        mcpRemoteTitle: 'Remote HTTP connection (server on a VPS)',
-        mcpRemoteDesc: 'If Pwnly runs on a remote server, connect from Claude Code without running anything locally (the API key travels in each request header):',
-        mcpCopy: 'Copy',
-        mcpCopied: 'Copied!',
-        mcpCreatedAt: 'Created',
-        mcpLastUsed: 'Last used',
-        mcpNeverUsed: 'Never used',
-        mcpError: 'Error managing API keys'
+        apiTitle: 'API / Integrations',
+        apiSubtitle: 'Manage reports and findings from scripts, CI or any HTTP client',
+        apiKeysTitle: 'API Keys',
+        apiKeysDesc: 'Long-lived keys to authenticate requests to the Pwnly REST API',
+        apiNoKeys: 'No API keys generated yet',
+        apiGenerateKey: 'Generate new API Key',
+        apiKeyLabelField: 'Label',
+        apiKeyLabelPlaceholder: 'e.g. "Import script"',
+        apiGenerate: 'Generate',
+        apiGenerating: 'Generating...',
+        apiRevoke: 'Revoke',
+        apiRevokeConfirm: 'Revoke this API key? Scripts and integrations using it will stop working.',
+        apiNewKeyWarning: 'Copy this key now. It will not be shown again.',
+        apiCopy: 'Copy',
+        apiCopied: 'Copied!',
+        apiCreatedAt: 'Created',
+        apiLastUsed: 'Last used',
+        apiNeverUsed: 'Never used',
+        apiError: 'Error managing API keys',
+        apiUsageTitle: 'How to use the API',
+        apiUsageDesc: 'The REST API uses JSON and is available on this same domain. Findings always belong to a report.',
+        apiAuthTitle: 'Authentication',
+        apiAuthDesc: 'Send your API key in the Authorization header of every request:',
+        apiBaseUrlLabel: 'Base URL',
+        apiAuthHeaderLabel: 'Header',
+        apiEndpointsTitle: 'Finding endpoints',
+        apiEndpointsDesc: 'Quick reference for automating finding management.',
+        apiMethod: 'Method',
+        apiEndpoint: 'Endpoint',
+        apiDescription: 'Description',
+        apiListReports: 'List reports',
+        apiCreateReport: 'Create report',
+        apiListFindings: 'List findings of a report',
+        apiGetFinding: 'Get a finding',
+        apiCreateFinding: 'Create finding',
+        apiBulkFindings: 'Create findings in bulk',
+        apiPatchFinding: 'Update finding (partial)',
+        apiDeleteFinding: 'Delete finding',
+        apiExampleTitle: 'Quick example',
+        apiExampleDesc: 'Create a report and add a finding with cURL:',
+        apiDocsHint: 'Full documentation in docs/API.md in the repository.'
     }
 };
 
@@ -810,10 +839,6 @@ const API = {
         delete: (id) => API.request('DELETE', `/api/api-keys/${id}`)
     },
 
-    mcpConfig: {
-        get: () => API.request('GET', '/api/mcp-config')
-    },
-
     reports: {
         getAll: () => API.request('GET', '/api/reports'),
         getById: (id) => API.request('GET', `/api/reports/${id}`),
@@ -823,8 +848,12 @@ const API = {
     },
 
     findings: {
+        getAll: (reportId) => API.request('GET', `/api/reports/${reportId}/findings`),
+        getById: (findingId) => API.request('GET', `/api/findings/${findingId}`),
         create: (reportId, data) => API.request('POST', `/api/reports/${reportId}/findings`, data),
+        bulkCreate: (reportId, data) => API.request('POST', `/api/reports/${reportId}/findings/bulk`, data),
         update: (findingId, data) => API.request('PUT', `/api/findings/${findingId}`, data),
+        patch: (findingId, data) => API.request('PATCH', `/api/findings/${findingId}`, data),
         delete: (findingId) => API.request('DELETE', `/api/findings/${findingId}`)
     },
 
@@ -3710,7 +3739,7 @@ function renderAccountPage() {
                     </div>
                 </div>
 
-                ${renderMcpSection()}
+                ${renderApiSection()}
 
             </div>
         </div>
@@ -4056,7 +4085,7 @@ async function deleteUser(userId) {
 }
 
 // --------------------------------------------------------------------------- //
-// MCP / Agentes IA — gestión de API keys
+// API / Integraciones — gestión de API keys y referencia REST
 // --------------------------------------------------------------------------- //
 async function loadApiKeys() {
     try {
@@ -4066,37 +4095,22 @@ async function loadApiKeys() {
     }
 }
 
-async function loadMcpServerInfo() {
-    try {
-        const info = await API.mcpConfig.get();
-        state.mcpServerPath = info.mcp_server_path || '';
-        state.mcpPythonExec = info.python_executable || 'python3';
-        state.mcpAvailable = info.mcp_available !== false;
-        state.mcpInstallHint = info.install_hint || null;
-    } catch (e) {
-        state.mcpServerPath = '';
-        state.mcpPythonExec = 'python3';
-        state.mcpAvailable = null;
-        state.mcpInstallHint = null;
-    }
-}
-
 async function createApiKey(event) {
     if (event) event.preventDefault();
     const isEs = state.lang === 'es';
-    const label = (state.mcpKeyLabel || '').trim() || (isEs ? 'Agent Key' : 'Agent Key');
+    const label = (state.apiKeyLabel || '').trim() || 'API Key';
 
-    state.mcpError = '';
-    const btn = document.getElementById('mcp-generate-btn');
-    if (btn) { btn.disabled = true; btn.textContent = UI[state.lang].mcpGenerating; }
+    state.apiError = '';
+    const btn = document.getElementById('api-generate-btn');
+    if (btn) { btn.disabled = true; btn.textContent = UI[state.lang].apiGenerating; }
 
     try {
         const result = await API.apiKeys.create({ label });
-        state.mcpNewKey = result;
-        state.mcpKeyLabel = '';
+        state.apiNewKey = result;
+        state.apiKeyLabel = '';
         await loadApiKeys();
     } catch (err) {
-        state.mcpError = (err.message && !err.message.startsWith('HTTP '))
+        state.apiError = (err.message && !err.message.startsWith('HTTP '))
             ? err.message
             : (isEs ? 'Error al generar la API key' : 'Error generating API key');
     }
@@ -4105,16 +4119,16 @@ async function createApiKey(event) {
 
 async function revokeApiKey(keyId) {
     const t = UI[state.lang];
-    if (!confirm(t.mcpRevokeConfirm)) return;
-    state.mcpError = '';
+    if (!confirm(t.apiRevokeConfirm)) return;
+    state.apiError = '';
     try {
         await API.apiKeys.delete(keyId);
-        if (state.mcpNewKey && state.mcpNewKey.id === keyId) state.mcpNewKey = null;
+        if (state.apiNewKey && state.apiNewKey.id === keyId) state.apiNewKey = null;
         await loadApiKeys();
     } catch (err) {
-        state.mcpError = (err.message && !err.message.startsWith('HTTP '))
+        state.apiError = (err.message && !err.message.startsWith('HTTP '))
             ? err.message
-            : t.mcpError;
+            : t.apiError;
     }
     renderApp();
 }
@@ -4127,7 +4141,7 @@ async function copyText(elementId, btn) {
         await navigator.clipboard.writeText(text || '');
         if (btn) {
             const orig = btn.textContent;
-            btn.textContent = UI[state.lang].mcpCopied || '✓';
+            btn.textContent = UI[state.lang].apiCopied || '✓';
             setTimeout(() => { if (btn) btn.textContent = orig; }, 2000);
         }
     } catch (e) {
@@ -4135,9 +4149,9 @@ async function copyText(elementId, btn) {
     }
 }
 
-function renderMcpSection() {
+function renderApiSection() {
     const t = UI[state.lang];
-    const isEs = state.lang === 'es';
+    const baseUrl = window.location.origin;
 
     // Lista de claves existentes
     const keyRows = state.apiKeys.length
@@ -4145,7 +4159,7 @@ function renderMcpSection() {
             const created = new Date(k.created_at).toLocaleDateString();
             const lastUsed = k.last_used_at
                 ? new Date(k.last_used_at).toLocaleDateString()
-                : t.mcpNeverUsed;
+                : t.apiNeverUsed;
             return `
                 <div class="account-user-row">
                     <div class="account-user-info" style="flex:1;flex-direction:column;align-items:flex-start;gap:0.2rem;">
@@ -4154,131 +4168,149 @@ function renderMcpSection() {
                             <span style="font-weight:600;font-size:0.875rem;">${escapeHTML(k.label)}</span>
                         </div>
                         <div style="font-size:0.75rem;color:var(--text-muted,#64748b);">
-                            ${t.mcpCreatedAt}: ${created} &nbsp;·&nbsp; ${t.mcpLastUsed}: ${lastUsed}
+                            ${t.apiCreatedAt}: ${created} &nbsp;·&nbsp; ${t.apiLastUsed}: ${lastUsed}
                         </div>
                     </div>
-                    <button class="account-user-delete" onclick="revokeApiKey(${k.id})" title="${t.mcpRevoke}">
+                    <button class="account-user-delete" onclick="revokeApiKey(${k.id})" title="${t.apiRevoke}">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                 </div>`;
         }).join('')
-        : `<p class="account-empty">${t.mcpNoKeys}</p>`;
+        : `<p class="account-empty">${t.apiNoKeys}</p>`;
 
     // Bloque con la nueva clave (solo visible justo después de generarla)
-    const newKeyBlock = state.mcpNewKey ? `
+    const newKeyBlock = state.apiNewKey ? `
         <div style="margin-top:0.75rem;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:0.875rem 1rem;">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;color:#f59e0b;font-size:0.8rem;font-weight:600;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                ${t.mcpNewKeyWarning}
+                ${t.apiNewKeyWarning}
             </div>
             <div style="display:flex;gap:0.5rem;align-items:center;">
-                <code id="mcp-new-key-value" style="flex:1;font-size:0.75rem;word-break:break-all;background:var(--input-bg,#f8fafc);padding:0.5rem 0.75rem;border-radius:6px;border:1px solid var(--border,#e2e8f0);display:block;">${escapeHTML(state.mcpNewKey.key)}</code>
-                <button class="btn-sm btn-primary" onclick="copyText('mcp-new-key-value', this)" style="flex-shrink:0;white-space:nowrap;">${t.mcpCopy}</button>
+                <code id="api-new-key-value" style="flex:1;font-size:0.75rem;word-break:break-all;background:var(--input-bg,#f8fafc);padding:0.5rem 0.75rem;border-radius:6px;border:1px solid var(--border,#e2e8f0);display:block;">${escapeHTML(state.apiNewKey.key)}</code>
+                <button class="btn-sm btn-primary" onclick="copyText('api-new-key-value', this)" style="flex-shrink:0;white-space:nowrap;">${t.apiCopy}</button>
             </div>
         </div>` : '';
 
-    // Config JSON para Claude Desktop
-    let configBlock = '';
-    if (state.mcpServerPath) {
-        const keyForConfig = state.mcpNewKey
-            ? state.mcpNewKey.key
-            : (state.apiKeys.length ? state.apiKeys[0].prefix + '…REEMPLAZA_CON_TU_CLAVE' : 'pwn_TU_CLAVE_AQUI');
+    // Referencia REST: la clave mostrada en los ejemplos es la recién creada o
+    // un marcador para que el usuario la sustituya por la suya.
+    const exampleKey = state.apiNewKey ? state.apiNewKey.key : 'pwn_TU_CLAVE';
 
-        const configJson = JSON.stringify({
-            mcpServers: {
-                pwnly: {
-                    command: state.mcpPythonExec,
-                    args: [state.mcpServerPath],
-                    env: {
-                        PWNLY_API_URL: window.location.origin,
-                        PWNLY_API_KEY: keyForConfig
-                    }
-                }
-            }
-        }, null, 2);
+    const endpointRows = [
+        ['GET', '/api/reports', t.apiListReports],
+        ['POST', '/api/reports', t.apiCreateReport],
+        ['GET', '/api/reports/{report_id}/findings', t.apiListFindings],
+        ['GET', '/api/findings/{finding_id}', t.apiGetFinding],
+        ['POST', '/api/reports/{report_id}/findings', t.apiCreateFinding],
+        ['POST', '/api/reports/{report_id}/findings/bulk', t.apiBulkFindings],
+        ['PATCH', '/api/findings/{finding_id}', t.apiPatchFinding],
+        ['DELETE', '/api/findings/{finding_id}', t.apiDeleteFinding],
+    ].map(([method, path, desc]) => `
+        <tr>
+            <td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--border,#e2e8f0);white-space:nowrap;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;color:${method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#d97706'};">${method}</span>
+            </td>
+            <td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--border,#e2e8f0);">
+                <code style="font-size:0.73rem;word-break:break-all;">${path}</code>
+            </td>
+            <td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--border,#e2e8f0);font-size:0.78rem;color:var(--text-muted,#64748b);">${desc}</td>
+        </tr>`).join('');
 
-        const cliBlock =
-            `export PWNLY_API_URL="${window.location.origin}"\n` +
-            `export PWNLY_API_KEY="${keyForConfig}"\n` +
-            `${state.mcpPythonExec} "${state.mcpServerPath}"`;
-
-        // Conexión remota: el servidor MCP corre en el propio Pwnly (mismo
-        // host/puerto, ruta /mcp). No se ejecuta nada en local.
-        const remoteCmd =
-            `claude mcp add --transport http pwnly ${window.location.origin}/mcp \\\n` +
-            `  --header "Authorization: Bearer ${keyForConfig}"`;
-
-        const mcpNotInstalledBanner = state.mcpAvailable === false ? `
-            <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;gap:0.6rem;align-items:flex-start;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                <div style="font-size:0.8rem;color:#f59e0b;line-height:1.5;">
-                    <strong>${isEs ? 'Paquete MCP no instalado' : 'MCP package not installed'}</strong> —
-                    ${isEs ? 'el servidor MCP requiere Python ≥ 3.10. Instálalo con:' : 'the MCP server requires Python ≥ 3.10. Install with:'}
-                    <code style="display:block;margin-top:0.3rem;background:rgba(0,0,0,0.15);padding:0.25rem 0.5rem;border-radius:4px;">${state.mcpInstallHint || "pip install 'mcp>=1.0'"}</code>
-                </div>
-            </div>` : '';
-
-        configBlock = `
-            <div class="account-divider"></div>
-            ${mcpNotInstalledBanner}
-            <h3 class="account-subsection-title" style="margin-bottom:0.4rem;">${t.mcpConfigTitle}</h3>
-            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.mcpConfigDesc}</p>
-            <div style="position:relative;">
-                <pre id="mcp-config-json" style="font-size:0.72rem;background:#0f172a;color:#e2e8f0;padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;margin:0;line-height:1.6;tab-size:2;">${escapeHTML(configJson)}</pre>
-                <button class="btn-sm btn-secondary" style="position:absolute;top:0.5rem;right:0.5rem;" onclick="copyText('mcp-config-json', this)">${t.mcpCopy}</button>
-            </div>
-
-            <h3 class="account-subsection-title" style="margin:1.25rem 0 0.4rem;">${t.mcpCliTitle}</h3>
-            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.mcpCliDesc}</p>
-            <div style="position:relative;">
-                <pre id="mcp-cli-block" style="font-size:0.72rem;background:#0f172a;color:#e2e8f0;padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;margin:0;line-height:1.6;">${escapeHTML(cliBlock)}</pre>
-                <button class="btn-sm btn-secondary" style="position:absolute;top:0.5rem;right:0.5rem;" onclick="copyText('mcp-cli-block', this)">${t.mcpCopy}</button>
-            </div>
-
-            <h3 class="account-subsection-title" style="margin:1.25rem 0 0.4rem;">${t.mcpRemoteTitle}</h3>
-            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.mcpRemoteDesc}</p>
-            <div style="position:relative;">
-                <pre id="mcp-remote-block" style="font-size:0.72rem;background:#0f172a;color:#e2e8f0;padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;margin:0;line-height:1.6;">${escapeHTML(remoteCmd)}</pre>
-                <button class="btn-sm btn-secondary" style="position:absolute;top:0.5rem;right:0.5rem;" onclick="copyText('mcp-remote-block', this)">${t.mcpCopy}</button>
-            </div>`;
-    }
+    const example = `# 1. Crear un reporte\n` +
+        `curl -X POST "${baseUrl}/api/reports" \\\n` +
+        `  -H "Authorization: Bearer ${exampleKey}" \\\n` +
+        `  -H "Content-Type: application/json" \\\n` +
+        `  -d '{"document_title":"Auditoría web","client_company":"ACME","target_asset":"https://app.example.com"}'\n\n` +
+        `# 2. Añadir un hallazgo al reporte (usa el id devuelto arriba)\n` +
+        `curl -X POST "${baseUrl}/api/reports/1/findings" \\\n` +
+        `  -H "Authorization: Bearer ${exampleKey}" \\\n` +
+        `  -H "Content-Type: application/json" \\\n` +
+        `  -d '{"title":"SQL Injection","severity":"crit","cvss":"9.8","description":"Inyección SQL en el parámetro id","poc":"GET /api/users?id=1%27","impact":"Acceso no autorizado a la base de datos","remediation":"Usar consultas parametrizadas"}'\n\n` +
+        `# 3. Actualizar solo el estado del hallazgo\n` +
+        `curl -X PATCH "${baseUrl}/api/findings/1" \\\n` +
+        `  -H "Authorization: Bearer ${exampleKey}" \\\n` +
+        `  -H "Content-Type: application/json" \\\n` +
+        `  -d '{"status":"remediated","retest_notes":"Corregido en el sprint 12"}'`;
 
     return `
         <div class="account-card" style="margin-top:1.5rem;">
             <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:0.3rem;">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent,#6366f1);flex-shrink:0;"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                <h2 class="account-section-title" style="margin:0;">${t.mcpTitle}</h2>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent,#6366f1);flex-shrink:0;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <h2 class="account-section-title" style="margin:0;">${t.apiTitle}</h2>
             </div>
-            <p style="font-size:0.875rem;color:var(--text-muted,#64748b);margin-bottom:1.25rem;">${t.mcpSubtitle}</p>
+            <p style="font-size:0.875rem;color:var(--text-muted,#64748b);margin-bottom:1.25rem;">${t.apiSubtitle}</p>
 
-            <h3 class="account-subsection-title">${t.mcpApiKeysTitle}</h3>
-            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;">${t.mcpApiKeysDesc}</p>
+            <h3 class="account-subsection-title">${t.apiKeysTitle}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;">${t.apiKeysDesc}</p>
 
             <div class="account-user-list">${keyRows}</div>
             ${newKeyBlock}
 
             <div class="account-divider"></div>
 
-            <h3 class="account-subsection-title">${t.mcpGenerateKey}</h3>
+            <h3 class="account-subsection-title">${t.apiGenerateKey}</h3>
             <form onsubmit="createApiKey(event)" style="display:flex;gap:0.6rem;align-items:flex-end;flex-wrap:wrap;">
                 <div style="flex:1;min-width:180px;">
-                    <label class="login-label">${t.mcpKeyLabelField}</label>
-                    <input type="text" id="mcp-key-label" class="login-input" placeholder="${t.mcpKeyLabelPlaceholder}"
-                        value="${escapeHTML(state.mcpKeyLabel || '')}"
-                        oninput="state.mcpKeyLabel=this.value"
+                    <label class="login-label">${t.apiKeyLabelField}</label>
+                    <input type="text" id="api-key-label" class="login-input" placeholder="${t.apiKeyLabelPlaceholder}"
+                        value="${escapeHTML(state.apiKeyLabel || '')}"
+                        oninput="state.apiKeyLabel=this.value"
                         style="margin-bottom:0;">
                 </div>
-                <button type="submit" class="login-btn" id="mcp-generate-btn"
+                <button type="submit" class="login-btn" id="api-generate-btn"
                     style="flex-shrink:0;height:40px;margin-top:0;padding:0 1.25rem;">
-                    ${t.mcpGenerate}
+                    ${t.apiGenerate}
                 </button>
             </form>
-            ${state.mcpError ? `<div class="login-error" style="margin-top:0.5rem;">${escapeHTML(state.mcpError)}</div>` : ''}
+            ${state.apiError ? `<div class="login-error" style="margin-top:0.5rem;">${escapeHTML(state.apiError)}</div>` : ''}
 
-            ${configBlock}
+            <div class="account-divider"></div>
+
+            <h3 class="account-subsection-title">${t.apiUsageTitle}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.75rem;">${t.apiUsageDesc}</p>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.6rem;margin-bottom:1rem;">
+                <div style="background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:0.6rem 0.75rem;">
+                    <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted,#64748b);margin-bottom:0.25rem;">${t.apiBaseUrlLabel}</div>
+                    <code style="font-size:0.76rem;word-break:break-all;">${escapeHTML(baseUrl)}</code>
+                </div>
+                <div style="background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:0.6rem 0.75rem;">
+                    <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted,#64748b);margin-bottom:0.25rem;">${t.apiAuthHeaderLabel}</div>
+                    <code style="font-size:0.76rem;word-break:break-all;">Authorization: Bearer pwn_…</code>
+                </div>
+            </div>
+
+            <h3 class="account-subsection-title" style="margin-top:1.25rem;">${t.apiAuthTitle}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.apiAuthDesc}</p>
+            <div style="position:relative;">
+                <pre id="api-auth-block" style="font-size:0.72rem;background:#0f172a;color:#e2e8f0;padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;margin:0;line-height:1.6;">${escapeHTML(`Authorization: Bearer ${exampleKey}`)}</pre>
+                <button class="btn-sm btn-secondary" style="position:absolute;top:0.5rem;right:0.5rem;" onclick="copyText('api-auth-block', this)">${t.apiCopy}</button>
+            </div>
+
+            <h3 class="account-subsection-title" style="margin:1.25rem 0 0.4rem;">${t.apiEndpointsTitle}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.apiEndpointsDesc}</p>
+            <div style="overflow-x:auto;border:1px solid var(--border,#e2e8f0);border-radius:8px;">
+                <table style="width:100%;border-collapse:collapse;background:var(--card,#fff);">
+                    <thead>
+                        <tr style="background:var(--input-bg,#f8fafc);text-align:left;">
+                            <th style="padding:0.5rem 0.6rem;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted,#64748b);">${t.apiMethod}</th>
+                            <th style="padding:0.5rem 0.6rem;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted,#64748b);">${t.apiEndpoint}</th>
+                            <th style="padding:0.5rem 0.6rem;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted,#64748b);">${t.apiDescription}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${endpointRows}</tbody>
+                </table>
+            </div>
+
+            <h3 class="account-subsection-title" style="margin:1.25rem 0 0.4rem;">${t.apiExampleTitle}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted,#64748b);margin-bottom:0.6rem;">${t.apiExampleDesc}</p>
+            <div style="position:relative;">
+                <pre id="api-example-block" style="font-size:0.72rem;background:#0f172a;color:#e2e8f0;padding:1rem 1.1rem;border-radius:8px;overflow-x:auto;margin:0;line-height:1.6;">${escapeHTML(example)}</pre>
+                <button class="btn-sm btn-secondary" style="position:absolute;top:0.5rem;right:0.5rem;" onclick="copyText('api-example-block', this)">${t.apiCopy}</button>
+            </div>
+
+            <p style="font-size:0.75rem;color:var(--text-muted,#64748b);margin-top:0.75rem;">${t.apiDocsHint}</p>
         </div>`;
 }
-
 async function doChangePassword(event) {
     if (event) event.preventDefault();
     const t = UI[state.lang];
@@ -5438,9 +5470,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : 'light';
             await loadSettings();
             applyThemeAttributes(state.reportTheme);
-            // En la página de cuenta cargamos usuarios, API keys y la config MCP.
+            // En la página de cuenta cargamos usuarios y API keys.
             if (state.isAccountView) {
-                await Promise.all([loadUsers(), loadApiKeys(), loadMcpServerInfo()]);
+                await Promise.all([loadUsers(), loadApiKeys()]);
             }
         } catch (e) {
             state.isAuthenticated = false;

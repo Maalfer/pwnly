@@ -9,8 +9,6 @@ sqlalchemy               # ORM
 pydantic                 # validación de esquemas
 starlette                # capa ASGI bajo FastAPI
 python-multipart         # subida de ficheros (FastAPI)
-mcp<2                    # MCP server (requiere Python ≥ 3.10). Fijado a 1.x: mcp 2.x
-                          # renombró FastMCP -> MCPServer y rompe backend/mcp_server.py
 
 # ---------------------------------------------------------------------------
 # Solo para la suite de tests (backend/tests/): no se necesita en producción

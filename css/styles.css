@@ -4705,7 +4705,7 @@ button {
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Bloques de código (PoC, exploit, config MCP) no deben desbordar. */
+    /* Bloques de código (PoC, exploit, config API) no deben desbordar. */
     pre, code, .code-input, .preview-container pre {
         white-space: pre-wrap;
         word-break: break-word;

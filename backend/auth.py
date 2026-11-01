@@ -154,7 +154,7 @@ def users_exist(db: Session) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# API Keys (acceso programático para agentes IA / MCP)
+# API Keys (acceso programático a la API REST)
 # --------------------------------------------------------------------------- #
 API_KEY_PREFIX = "pwn_"
 
@@ -187,7 +187,7 @@ def require_auth(request: Request, db: Session = Depends(get_db)) -> "models.Use
     if not token:
         raise HTTPException(status_code=401, detail="No autenticado")
 
-    # Las API keys de agentes tienen el prefijo pwn_ y se verifican por hash.
+    # Las API keys de la API REST tienen el prefijo pwn_ y se verifican por hash.
     if token.startswith(API_KEY_PREFIX):
         user = verify_api_key(token, db)
         if user:

@@ -14,14 +14,14 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.3.2-blue.svg" alt="Version 2.3.2">
+  <img src="https://img.shields.io/badge/version-2.4.0-blue.svg" alt="Version 2.4.0">
   <img src="https://img.shields.io/badge/Maintained%3F-yes-green.svg" alt="Maintained">
   <img src="https://img.shields.io/badge/PRs-welcome-blue.svg" alt="PRs Welcome">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License MIT">
 </p>
 
 <p align="center">
-  <strong>Versión actual: 2.3.2</strong>
+  <strong>Versión actual: 2.4.0</strong>
 </p>
 
 ## Estructura del Proyecto
@@ -38,13 +38,13 @@ pwnly/
 │   └── app.js              # Aplicación Vanilla JavaScript
 ├── assets/                 # Imágenes y recursos estáticos
 ├── demo/                   # Capturas de pantalla
+├── docs/                   # Landing page y documentación de la API
 └── backend/                # API FastAPI
     ├── main.py             # Endpoints y lógica principal
     ├── models.py           # Modelos SQLAlchemy
     ├── schemas.py          # Esquemas Pydantic
     ├── database.py         # Configuración SQLite
     ├── migrations.py       # Migraciones de base de datos
-    ├── mcp_server.py       # Servidor MCP para agentes IA
     └── tests/              # Tests pytest
         ├── conftest.py
         ├── test_api_info.py
@@ -102,6 +102,37 @@ Los datos se almacenan en `pwnly.db` (SQLite) con dos tablas:
 
 - **reports** - Datos generales del reporte (cliente, fecha, etc.)
 - **findings** - Vulnerabilidades asociadas a cada reporte
+
+## API REST
+
+Los reportes y hallazgos se pueden gestionar por completo desde la API REST, sin
+depender de la interfaz web ni de integraciones externas. Es el mismo mecanismo
+que usa el frontend, por lo que cualquier cambio queda reflejado al instante.
+
+1. Entra en **Cuenta → API / Integraciones** y genera una API key (`pwn_...`).
+2. Envía la clave en cada petición:
+
+```bash
+curl -H "Authorization: Bearer pwn_TU_CLAVE" \
+     https://tu-dominio/api/reports
+```
+
+Endpoints principales:
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/api/reports` | Listar reportes |
+| `POST` | `/api/reports` | Crear reporte |
+| `GET` | `/api/reports/{id}/findings` | Listar hallazgos del reporte |
+| `GET` | `/api/findings/{id}` | Obtener un hallazgo |
+| `POST` | `/api/reports/{id}/findings` | Crear hallazgo |
+| `POST` | `/api/reports/{id}/findings/bulk` | Crear hallazgos en lote |
+| `PATCH` | `/api/findings/{id}` | Actualizar campos concretos de un hallazgo |
+| `PUT` | `/api/findings/{id}` | Reemplazar un hallazgo completo |
+| `DELETE` | `/api/findings/{id}` | Eliminar un hallazgo |
+
+La referencia completa, con ejemplos de cURL y todos los campos disponibles,
+está en [`docs/API.md`](docs/API.md).
 
 ## Funcionalidades de Persistencia
 

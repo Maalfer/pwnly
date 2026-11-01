@@ -163,14 +163,14 @@ class AppSettings(Base):
 
 
 class ApiKey(Base):
-    """Clave de API de larga duración para acceso programático (agentes IA, MCP).
+    """Clave de API de larga duración para acceso programático a la API REST.
     El secreto nunca se guarda en claro: sólo su SHA-256. El prefijo (pwn_XXXXXXXX)
     se almacena para identificar la clave visualmente sin exponerla."""
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    label = Column(String, nullable=False, default="Agent Key")
+    label = Column(String, nullable=False, default="API Key")
     key_hash = Column(String, nullable=False, unique=True)   # SHA-256 del secreto completo
     prefix = Column(String, nullable=False)                   # "pwn_XXXXXXXX" para mostrar
     created_at = Column(DateTime, default=datetime.utcnow)
