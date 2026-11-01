@@ -1,0 +1,19 @@
+# ---------------------------------------------------------------------------
+# Dependencias de ejecución (runtime)
+# ---------------------------------------------------------------------------
+# Sin pines de versión: pip instalará siempre la última versión disponible
+# compatible con tu Python.
+fastapi                  # framework de la API
+uvicorn[standard]        # servidor ASGI
+sqlalchemy               # ORM
+pydantic                 # validación de esquemas
+starlette                # capa ASGI bajo FastAPI
+python-multipart         # subida de ficheros (FastAPI)
+mcp                      # MCP server (requiere Python ≥ 3.10)
+
+# ---------------------------------------------------------------------------
+# Solo para la suite de tests (backend/tests/): no se necesita en producción
+# ---------------------------------------------------------------------------
+pytest
+pytest-asyncio
+httpx                    # cliente usado por el TestClient de FastAPI/Starlette

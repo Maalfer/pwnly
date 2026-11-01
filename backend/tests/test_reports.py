@@ -1,0 +1,309 @@
+"""Tests para endpoints de Reportes"""
+
+
+class TestReportsAPI:
+    """Test suite para la API de Reportes"""
+    
+    def test_api_info_endpoint(self, client):
+        """Test: GET /api retorna información de la API"""
+        response = client.get("/api")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Pwnly API"
+        assert data["version"] == "2.1.0"
+    
+    def test_create_report(self, client):
+        """Test: POST /api/reports crea un reporte"""
+        report_data = {
+            "document_title": "Test Report",
+            "client_company": "Test Client",
+            "target_asset": "Test App",
+            "auditor_company": "Test Auditor",
+            "auditor_name": "Test User",
+            "classification": 2,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        
+        response = client.post("/api/reports", json=report_data)
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["document_title"] == "Test Report"
+        assert data["client_company"] == "Test Client"
+        assert data["id"] is not None
+        assert "created_at" in data
+    
+    def test_get_all_reports(self, client):
+        """Test: GET /api/reports retorna lista de reportes"""
+        # Crear reporte primero
+        report_data = {
+            "document_title": "List Test",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 1,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "en"
+        }
+        client.post("/api/reports", json=report_data)
+        
+        response = client.get("/api/reports")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert data[0]["document_title"] == "List Test"
+    
+    def test_get_single_report(self, client):
+        """Test: GET /api/reports/{id} retorna reporte específico"""
+        # Crear reporte
+        report_data = {
+            "document_title": "Single Test",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 1,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        create_response = client.post("/api/reports", json=report_data)
+        report_id = create_response.json()["id"]
+        
+        # Obtener reporte
+        response = client.get(f"/api/reports/{report_id}")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["id"] == report_id
+        assert data["document_title"] == "Single Test"
+        assert "findings" in data
+    
+    def test_get_nonexistent_report(self, client):
+        """Test: GET /api/reports/999 retorna 404"""
+        response = client.get("/api/reports/999")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Reporte no encontrado"
+    
+    def test_update_report(self, client):
+        """Test: PUT /api/reports/{id} actualiza reporte"""
+        # Crear reporte
+        report_data = {
+            "document_title": "Original",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 1,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        create_response = client.post("/api/reports", json=report_data)
+        report_id = create_response.json()["id"]
+        
+        # Actualizar
+        update_data = {
+            "document_title": "Updated Title",
+            "client_company": "Updated Client",
+            "target_asset": "Updated App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 3,
+            "version": "2.0",
+            "date": "2024-02-20",
+            "lang": "en"
+        }
+        response = client.put(f"/api/reports/{report_id}", json=update_data)
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["document_title"] == "Updated Title"
+        assert data["version"] == "2.0"
+        assert data["lang"] == "en"
+    
+    def test_update_nonexistent_report(self, client):
+        """Test: PUT /api/reports/999 retorna 404"""
+        update_data = {
+            "document_title": "Updated",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 1,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        response = client.put("/api/reports/999", json=update_data)
+        assert response.status_code == 404
+    
+    def test_delete_report(self, client):
+        """Test: DELETE /api/reports/{id} elimina reporte"""
+        # Crear reporte
+        report_data = {
+            "document_title": "To Delete",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 1,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        create_response = client.post("/api/reports", json=report_data)
+        report_id = create_response.json()["id"]
+        
+        # Eliminar
+        response = client.delete(f"/api/reports/{report_id}")
+        assert response.status_code == 200
+        assert response.json()["message"] == "Reporte eliminado correctamente"
+        
+        # Verificar que ya no existe
+        get_response = client.get(f"/api/reports/{report_id}")
+        assert get_response.status_code == 404
+    
+    def test_delete_nonexistent_report(self, client):
+        """Test: DELETE /api/reports/999 retorna 404"""
+        response = client.delete("/api/reports/999")
+        assert response.status_code == 404
+
+    # --- TLP 2.0 ---
+
+    def test_create_report_with_tlp(self, client):
+        """Test: POST /api/reports acepta tlp_level y classification_mode"""
+        report_data = {
+            "document_title": "TLP Report",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 2,
+            "tlp_level": "red",
+            "classification_mode": "tlp",
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        response = client.post("/api/reports", json=report_data)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tlp_level"] == "red"
+        assert data["classification_mode"] == "tlp"
+
+    def test_report_tlp_defaults(self, client):
+        """Test: Reporte sin TLP usa defaults amber / internal"""
+        report_data = {
+            "document_title": "Default TLP",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 2,
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        response = client.post("/api/reports", json=report_data)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tlp_level"] == "amber"
+        assert data["classification_mode"] == "internal"
+
+    def test_update_report_tlp_fields(self, client):
+        """Test: PUT /api/reports/{id} actualiza tlp_level y classification_mode"""
+        create_data = {
+            "document_title": "TLP Update Test",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 2,
+            "tlp_level": "green",
+            "classification_mode": "internal",
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        report_id = client.post("/api/reports", json=create_data).json()["id"]
+
+        update_data = {**create_data, "tlp_level": "amber+strict", "classification_mode": "both"}
+        response = client.put(f"/api/reports/{report_id}", json=update_data)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tlp_level"] == "amber+strict"
+        assert data["classification_mode"] == "both"
+
+    def test_all_tlp_levels_accepted(self, client):
+        """Test: Todos los niveles TLP 2.0 son aceptados"""
+        for level in ["clear", "green", "amber", "amber+strict", "red"]:
+            report_data = {
+                "document_title": f"TLP {level}",
+                "client_company": "Client",
+                "target_asset": "App",
+                "auditor_company": "Auditor",
+                "auditor_name": "User",
+                "classification": 2,
+                "tlp_level": level,
+                "classification_mode": "tlp",
+                "version": "1.0",
+                "date": "2024-01-15",
+                "lang": "es"
+            }
+            response = client.post("/api/reports", json=report_data)
+            assert response.status_code == 200
+            assert response.json()["tlp_level"] == level
+
+    def test_all_classification_modes_accepted(self, client):
+        """Test: Los tres modos de clasificación son aceptados"""
+        for mode in ["internal", "tlp", "both"]:
+            report_data = {
+                "document_title": f"Mode {mode}",
+                "client_company": "Client",
+                "target_asset": "App",
+                "auditor_company": "Auditor",
+                "auditor_name": "User",
+                "classification": 2,
+                "tlp_level": "amber",
+                "classification_mode": mode,
+                "version": "1.0",
+                "date": "2024-01-15",
+                "lang": "es"
+            }
+            response = client.post("/api/reports", json=report_data)
+            assert response.status_code == 200
+            assert response.json()["classification_mode"] == mode
+
+    def test_tlp_persists_after_get(self, client):
+        """Test: Los campos TLP se conservan al recuperar el reporte por ID"""
+        report_data = {
+            "document_title": "TLP Persist",
+            "client_company": "Client",
+            "target_asset": "App",
+            "auditor_company": "Auditor",
+            "auditor_name": "User",
+            "classification": 3,
+            "tlp_level": "red",
+            "classification_mode": "both",
+            "version": "1.0",
+            "date": "2024-01-15",
+            "lang": "es"
+        }
+        report_id = client.post("/api/reports", json=report_data).json()["id"]
+
+        response = client.get(f"/api/reports/{report_id}")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["tlp_level"] == "red"
+        assert data["classification_mode"] == "both"
