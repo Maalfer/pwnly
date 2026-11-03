@@ -942,21 +942,24 @@ function renderNavbar() {
     return `
         <header class="navbar">
             <div class="navbar-brand">
-                <span onclick="showReports()" title="${t.myReports}" style="display:inline-flex;align-items:center;gap:0.65rem;cursor:pointer;">
-                    <img src="/assets/logo-transparent.png" alt="Pwnly" style="height: 38px; width: 38px; object-fit: contain; flex-shrink: 0;">
+                <button type="button" onclick="showReports()" aria-label="Pwnly — ${t.myReports}" style="display:inline-flex;align-items:center;gap:0.65rem;cursor:pointer;background:none;border:0;padding:0;color:inherit;font:inherit;">
+                    <img src="/assets/logo-transparent.png" alt="" style="height: 38px; width: 38px; object-fit: contain; flex-shrink: 0;">
                     <span class="app-name">Pwnly</span>
-                </span>
+                </button>
                 <span class="app-version-badge">v${APP_VERSION}</span>
                 ${state.isDirty ? '<span class="dirty-indicator">•</span>' : ''}
             </div>
             
             <div class="navbar-actions">
-                <button class="${state.showReportSelector ? 'active' : ''}" onclick="showReports()">${t.myReports}</button>
-                <button class="${state.activeTab === 'editor' && !state.showReportSelector ? 'active' : ''}" onclick="hideReports(); setTab('editor')">${t.editor}</button>
-                <button class="${state.activeTab === 'preview' && !state.showReportSelector ? 'active' : ''}" onclick="hideReports(); setTab('preview')">${t.preview}</button>
-                <button class="${state.showThemesPage ? 'active' : ''}" onclick="showThemesPage()">${state.lang === 'es' ? 'Temas' : 'Themes'}</button>
+                <nav class="navbar-tabs" aria-label="${state.lang === 'es' ? 'Navegación principal' : 'Main navigation'}">
+                <button class="${state.showReportSelector ? 'active' : ''}" ${state.showReportSelector ? 'aria-current="page"' : ''} onclick="showReports()">${t.myReports}</button>
+                <button class="${state.activeTab === 'editor' && !state.showReportSelector ? 'active' : ''}" ${state.activeTab === 'editor' && !state.showReportSelector && !state.showThemesPage ? 'aria-current="page"' : ''} onclick="hideReports(); setTab('editor')">${t.editor}</button>
+                <button class="${state.activeTab === 'preview' && !state.showReportSelector ? 'active' : ''}" ${state.activeTab === 'preview' && !state.showReportSelector && !state.showThemesPage ? 'aria-current="page"' : ''} onclick="hideReports(); setTab('preview')">${t.preview}</button>
+                <button class="${state.showThemesPage ? 'active' : ''}" ${state.showThemesPage ? 'aria-current="page"' : ''} onclick="showThemesPage()">${state.lang === 'es' ? 'Temas' : 'Themes'}</button>
+                </nav>
+                <div class="navbar-tools">
                 <div class="export-dropdown" style="position:relative;display:inline-block;">
-                    <button class="btn-primary pdf-btn${(state.generatingPdf || state.exportingHtml) ? ' pdf-btn--loading' : ''}" onclick="toggleExportMenu(event)" ${(state.generatingPdf || state.exportingHtml) ? 'disabled' : ''}>
+                    <button class="btn-primary pdf-btn${(state.generatingPdf || state.exportingHtml) ? ' pdf-btn--loading' : ''}" onclick="toggleExportMenu(event)" aria-haspopup="menu" aria-expanded="${state.exportMenuOpen ? 'true' : 'false'}" aria-label="${state.lang === 'es' ? 'Exportar informe' : 'Export report'}" ${(state.generatingPdf || state.exportingHtml) ? 'disabled' : ''}>
                         ${(state.generatingPdf || state.exportingHtml)
                             ? `<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${state.generatingPdf ? t.generatingPdf : t.exportingHtml}`
                             : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t.export}
@@ -964,24 +967,25 @@ function renderNavbar() {
                         }
                     </button>
                     ${state.exportMenuOpen ? `
-                        <div class="export-menu">
-                            <button onclick="chooseExport('pdf')">
+                        <div class="export-menu" role="menu">
+                            <button role="menuitem" onclick="chooseExport('pdf')">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                 <span>${t.generatePdf}</span>
                             </button>
-                            <button onclick="chooseExport('html')">
+                            <button role="menuitem" onclick="chooseExport('html')">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                                 <span>${t.exportHtml}</span>
                             </button>
                         </div>
                     ` : ''}
                 </div>
-                <button class="settings-btn" onclick="openSettings()" title="${state.lang === 'es' ? 'Ajustes' : 'Settings'}">
+                <button class="settings-btn" onclick="openSettings()" title="${state.lang === 'es' ? 'Ajustes' : 'Settings'}" aria-label="${state.lang === 'es' ? 'Ajustes' : 'Settings'}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
-                <button class="settings-btn" onclick="openProfile()" title="${UI[state.lang].profile}">
+                <button class="settings-btn" onclick="openProfile()" title="${UI[state.lang].profile}" aria-label="${UI[state.lang].profile}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
+                </div>
             </div>
         </header>
     `;
@@ -1159,11 +1163,13 @@ function postRenderEditor() {
     page.querySelectorAll('input[type=file]').forEach(c => {
         if (!c.getAttribute('aria-label')) c.setAttribute('aria-label', (c.closest('.form-group')?.querySelector('label')?.textContent || 'Archivo').trim());
     });
+    page.querySelectorAll('h3').forEach(h => h.setAttribute('aria-level', '2'));
     // 3) Tarjetas como regiones con nombre.
     page.querySelectorAll('.editor-meta-card').forEach(card => {
         const h = card.querySelector('h3');
         if (!h) return;
         if (!h.id) h.id = card.id + '-title';
+        if (card.tagName === 'DETAILS') return;   // <details> ya es un grupo con su <summary>
         card.setAttribute('role', 'region');
         card.setAttribute('aria-labelledby', h.id);
     });
@@ -1224,6 +1230,7 @@ function renderEditor() {
 
     return `
         <div class="editor-page">
+        <h1 class="sr-only">${state.lang === 'es' ? 'Editor del informe' : 'Report editor'}${state.auditData.documentTitle ? ': ' + escapeHTML(state.auditData.documentTitle) : ''}</h1>
         ${renderEditorBar()}
         <div class="editor-meta-grid">
             ${renderGeneralInfoCard()}
@@ -1330,7 +1337,7 @@ function renderEditor() {
                         </div>
 
                         <div class="form-group image-upload-section" onpaste="handleImagePaste(event)">
-                            <label>${t.images} <small style="font-weight:normal;color:#666;">(también puedes pegar imagen con Ctrl+V aquí)</small></label>
+                            <label>${t.images} <small style="font-weight:normal;color:var(--text-muted,#666);">(también puedes pegar imagen con Ctrl+V aquí)</small></label>
                             <input type="file" id="findingImages" accept="image/*" multiple onchange="handleImageUpload(event)">
                             <small class="text-muted">${state.currentFinding.images.length} imagen(es) seleccionada(s)</small>
                         </div>
@@ -1501,7 +1508,7 @@ function renderGeneralInfoCard() {
             </div>
 
             <fieldset class="form-group" style="border:none;padding:0;margin-bottom:0;">
-                <legend style="font-size:0.6875rem;font-weight:700;color:#64748b;margin-bottom:0.375rem;letter-spacing:0.06em;text-transform:uppercase;padding:0;">${t.incidents}</legend>
+                <legend style="font-size:0.6875rem;font-weight:700;color:var(--text-muted,#64748b);margin-bottom:0.375rem;letter-spacing:0.06em;text-transform:uppercase;padding:0;">${t.incidents}</legend>
                 <div class="incidents-toggle" style="display:flex; gap:0.75rem; margin-bottom:0.5rem;">
                     <label style="display:flex; align-items:center; gap:0.4rem; font-weight:500; text-transform:none; letter-spacing:normal; cursor:pointer;">
                         <input type="radio" name="hasIncidents" value="no" ${!d.hasIncidents ? 'checked' : ''} onchange="updateAuditData('hasIncidents', false); document.getElementById('incidentsTextContainer').style.display='none';" style="width:auto; padding:0; margin:0;">
@@ -1530,19 +1537,19 @@ function renderExecutiveSummaryCard() {
             <div class="details-body">
             <div class="form-group">
                 <label for="genAuditSummary">${t.auditSummary}</label>
-                <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.auditSummaryDesc}</small>
+                <small style="display:block; color:var(--text-muted,#666); margin-bottom:0.5rem; font-weight:normal;">${t.auditSummaryDesc}</small>
                 <textarea id="genAuditSummary" rows="4" placeholder="${t.auditSummary}..." oninput="updateAuditData('auditSummary', this.value)">${escapeHTML(d.auditSummary)}</textarea>
             </div>
 
             <div class="form-group">
                 <label for="genTestsPerformed">${t.testsPerformed}</label>
-                <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.testsPerformedDesc}</small>
+                <small style="display:block; color:var(--text-muted,#666); margin-bottom:0.5rem; font-weight:normal;">${t.testsPerformedDesc}</small>
                 <textarea id="genTestsPerformed" rows="4" placeholder="${t.testsPerformed}..." oninput="updateAuditData('testsPerformed', this.value)">${escapeHTML(d.testsPerformed)}</textarea>
             </div>
 
             <div class="form-group" style="margin-bottom:0;">
                 <label for="genRecommendedSolutions">${t.recommendedSolutions}</label>
-                <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.recommendedSolutionsDesc}</small>
+                <small style="display:block; color:var(--text-muted,#666); margin-bottom:0.5rem; font-weight:normal;">${t.recommendedSolutionsDesc}</small>
                 <textarea id="genRecommendedSolutions" rows="4" placeholder="${t.recommendedSolutions}..." oninput="updateAuditData('recommendedSolutions', this.value)">${escapeHTML(d.recommendedSolutions)}</textarea>
             </div>
             </div>
@@ -1577,7 +1584,7 @@ function getScopeFieldVis(key) {
 function _scopeFieldToggle(key, isEs) {
     const on = getScopeFieldVis(key);
     return `<span role="switch" tabindex="0" aria-checked="${on}" aria-label="${isEs ? 'Incluir en el informe' : 'Include in report'}" onkeydown="switchKey(event)" class="rep-switch" onclick="toggleScopeField('${key}')" title="${isEs ? 'Incluir en informe' : 'Include in report'}"
-        style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.75rem;font-weight:500;color:${on ? '#2563eb' : '#9ca3af'};user-select:none;flex-shrink:0;">
+        style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.75rem;font-weight:500;color:${on ? '#60a5fa' : '#a1a1aa'};user-select:none;flex-shrink:0;">
         <span style="position:relative;display:inline-block;width:28px;height:16px;">
             <span style="display:block;width:28px;height:16px;border-radius:999px;background:${on ? '#2563eb' : '#d1d5db'};transition:background 0.15s;"></span>
             <span style="position:absolute;top:2px;left:${on ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2);transition:left 0.15s;"></span>
@@ -1613,7 +1620,7 @@ function toggleCurrentFindingField(key) {
 function _findingFieldToggle(key, isEs) {
     const on = getFindingFieldVis(state.currentFinding, key);
     return `<span role="switch" tabindex="0" aria-checked="${on}" aria-label="${isEs ? 'Incluir este campo en el informe' : 'Include this field in the report'}" onkeydown="switchKey(event)" class="rep-switch" onclick="toggleCurrentFindingField('${key}')" title="${isEs ? 'Incluir este campo en el informe' : 'Include this field in the report'}"
-        style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.72rem;font-weight:500;color:${on ? '#2563eb' : '#9ca3af'};user-select:none;flex-shrink:0;">
+        style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.72rem;font-weight:500;color:${on ? '#60a5fa' : '#a1a1aa'};user-select:none;flex-shrink:0;">
         <span style="position:relative;display:inline-block;width:28px;height:16px;">
             <span style="display:block;width:28px;height:16px;border-radius:999px;background:${on ? '#2563eb' : '#d1d5db'};transition:background 0.15s;"></span>
             <span style="position:absolute;top:2px;left:${on ? '14px' : '2px'};width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2);transition:left 0.15s;"></span>
@@ -2353,7 +2360,7 @@ function renderThemesPage() {
                     return `
                     <article class="theme-card2 ${active ? 'active' : ''} ${th.builtin ? 'builtin' : ''}" aria-label="${nm}">
                         <div class="theme-card2-thumb" aria-hidden="true">
-                            <iframe tabindex="-1" sandbox title="" data-theme-thumb="${slugAttr}"></iframe>
+                            <iframe tabindex="-1" sandbox title="${nm}" data-theme-thumb="${slugAttr}"></iframe>
                         </div>
                         <div class="theme-card2-head">
                             <span class="theme-card2-name">${nm}</span>
@@ -2463,7 +2470,7 @@ function renderThemeStudio() {
 
     return `
         <div class="theme-studio">
-            <div class="theme-studio-header">
+            <div class="theme-studio-header" role="banner">
                 <div class="ts-head-left">
                     <button class="account-back-btn" onclick="closeThemeEditor()">&larr; ${isEs ? 'Temas' : 'Themes'}</button>
                     <h1>${ed.isNew ? (isEs ? 'Nuevo tema' : 'New theme') : (isEs ? 'Editar tema' : 'Edit theme')}</h1>
@@ -2476,27 +2483,27 @@ function renderThemeStudio() {
                     <button class="btn-sm btn-primary" onclick="saveThemeFromEditor()">${isEs ? 'Guardar' : 'Save'}</button>
                 </div>
             </div>
-            <div class="theme-studio-body">
+            <div class="theme-studio-body" role="main" id="main-content" tabindex="-1">
                 <div class="ts-controls ts-controls--code">
                     <div class="ts-tabs">
                         <button class="ts-tab ${tab === 'html' ? 'active' : ''}" onclick="themeEditorSetTab('html')">HTML</button>
                         <button class="ts-tab ${tab === 'css' ? 'active' : ''}" onclick="themeEditorSetTab('css')">CSS</button>
                     </div>
                     ${tab === 'html' ? `
-                        <textarea class="ts-code ts-code--full" spellcheck="false"
+                        <textarea class="ts-code ts-code--full" spellcheck="false" aria-label="${isEs ? 'Código del tema' : 'Theme code'}"
                             oninput="themeEditorSetHtml(this.value)">${escapeHTML(ed.html)}</textarea>
                         <p class="ts-hint">${isEs
                             ? 'Plantilla del documento. Sintaxis: <code>{{variable}}</code>, <code>{{{html_sin_escapar}}}</code>, <code>{{#each lista}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'
                             : 'Document template. Syntax: <code>{{variable}}</code>, <code>{{{unescaped_html}}}</code>, <code>{{#each list}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'}</p>
                     ` : `
-                        <textarea class="ts-code ts-code--full" spellcheck="false"
+                        <textarea class="ts-code ts-code--full" spellcheck="false" aria-label="${isEs ? 'Código del tema' : 'Theme code'}"
                             oninput="themeEditorSetCss(this.value)">${escapeHTML(ed.css)}</textarea>
                         <p class="ts-hint">${isEs ? 'CSS libre: sin espacio de nombres ni variables obligatorias, es tu CSS.' : 'Free CSS: no required namespace or variables, it is just your CSS.'}</p>
                     `}
                 </div>
                 <div class="ts-preview ts-preview--frame">
                     <p class="ts-preview-title">${isEs ? 'Vista previa en vivo' : 'Live preview'}</p>
-                    <iframe id="theme-editor-preview-frame" class="ts-preview-iframe"></iframe>
+                    <iframe id="theme-editor-preview-frame" class="ts-preview-iframe" title="${isEs ? 'Vista previa en vivo del tema' : 'Live theme preview'}"></iframe>
                 </div>
             </div>
         </div>
@@ -2828,7 +2835,7 @@ function renderCvssCalcModal() {
                         <span class="cvss-score-num" id="cvss-live-score">${r.score}</span>
                         <div>
                             <div style="font-weight:800;text-transform:uppercase;font-size:0.8rem;letter-spacing:0.05em;">${sevLabel}</div>
-                            <div id="cvss-live-vector" style="font-family:ui-monospace,Menlo,monospace;font-size:0.72rem;opacity:0.9;word-break:break-all;">${r.vector}</div>
+                            <div id="cvss-live-vector" style="font-family:ui-monospace,Menlo,monospace;font-size:0.72rem;opacity:1;word-break:break-all;">${r.vector}</div>
                         </div>
                     </div>
                     <div class="cvss-calc-grid">
@@ -3188,16 +3195,16 @@ function renderReportsPage() {
                         <p class="text-muted">${t.noReportsDesc}</p>
                     </div>
                 ` : state.savedReports.map(r => `
-                    <div class="report-card" onclick="loadReport(${r.id})">
+                    <article class="report-card" onclick="loadReport(${r.id})">
                         <div class="report-card-actions" onclick="event.stopPropagation()">
-                            <button class="report-card-icon-btn danger" title="${state.lang === 'es' ? 'Eliminar reporte' : 'Delete report'}" onclick="deleteReport(${r.id})">
+                            <button class="report-card-icon-btn danger" title="${state.lang === 'es' ? 'Eliminar reporte' : 'Delete report'}" aria-label="${state.lang === 'es' ? 'Eliminar reporte' : 'Delete report'}: ${escapeHTML(r.document_title)}" onclick="deleteReport(${r.id})">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>
                         </div>
-                        <h3>${escapeHTML(r.document_title)}</h3>
+                        <h2 class="report-card-title"><button type="button" class="report-open" onclick="event.stopPropagation();loadReport(${r.id})">${escapeHTML(r.document_title)}</button></h2>
                         <p>${escapeHTML(r.client_company)}</p>
                         <span>${r.findings_count || 0} ${state.lang === 'es' ? 'hallazgos' : 'findings'}</span>
-                    </div>
+                    </article>
                 `).join('')}
             </div>
 
@@ -3344,8 +3351,8 @@ function renderPdfModal() {
         const active = state.pdfPrintTheme === th.slug;
         return `<button id="pdf-theme-btn-${escapeHTML(th.slug)}" onclick="pdfModalSetTheme('${th.slug}')"
             style="flex:1 1 auto;min-width:110px;padding:0.6rem 0.75rem;border-radius:10px;text-align:left;
-                   border:2px solid ${active ? '#3b82f6' : c.border};
-                   background:${active ? '#3b82f6' : c.cardBg};
+                   border:2px solid ${active ? '#2563eb' : c.border};
+                   background:${active ? '#2563eb' : c.cardBg};
                    color:${active ? '#ffffff' : c.textMuted};
                    cursor:pointer;font-weight:${active ? '700' : '500'};font-size:0.825rem;transition:all 0.15s;">
             ${escapeHTML(th.name)}
@@ -3353,10 +3360,10 @@ function renderPdfModal() {
     }
 
     const toggleOn  = state.pdfShowSeverityBars;
-    const toggleBg  = toggleOn ? '#3b82f6' : c.border;
+    const toggleBg  = toggleOn ? '#2563eb' : c.border;
     const thumbLeft = toggleOn ? '22px' : '2px';
     const panelBg   = '#111113';
-    const dotMuted  = '#71717a';
+    const dotMuted  = '#a1a1aa';
 
     return `
         <div class="settings-overlay" style="align-items:center;justify-content:center;padding:1rem;" onclick="closePdfModal()">
@@ -3400,7 +3407,7 @@ function renderPdfModal() {
                                 <p style="font-size:0.775rem;color:${c.textFaint};margin:0;line-height:1.4;">${t.pdfModalSeverityBarsDesc}</p>
                             </div>
                             <label style="position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;">
-                                <input type="checkbox" style="opacity:0;position:absolute;width:0;height:0;" ${toggleOn ? 'checked' : ''} onchange="pdfModalSetBars(this.checked)">
+                                <input type="checkbox" role="switch" aria-label="${t.pdfModalSeverityBars}" style="opacity:0;position:absolute;width:44px;height:24px;margin:0;" ${toggleOn ? 'checked' : ''} onchange="pdfModalSetBars(this.checked)">
                                 <div id="pdf-toggle-bg" style="width:44px;height:24px;background:${toggleBg};border-radius:12px;position:relative;transition:background 0.2s;">
                                     <div id="pdf-toggle-thumb" style="position:absolute;top:2px;left:${thumbLeft};width:20px;height:20px;background:white;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.25);"></div>
                                 </div>
@@ -3415,10 +3422,10 @@ function renderPdfModal() {
                             <p style="font-size:0.75rem;color:${c.textFaint};margin:0 0 0.875rem;line-height:1.4;">${t.pdfModalContentWidthDesc}</p>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.375rem;">
                                 <span style="font-size:0.8rem;color:${c.textFaint};">${t.pdfModalContentWidthNarrow}</span>
-                                <span id="pdf-content-width-val" style="font-size:0.875rem;font-weight:700;color:#3b82f6;">${state.pdfContentWidth} px</span>
+                                <span id="pdf-content-width-val" style="font-size:0.875rem;font-weight:700;color:#60a5fa;">${state.pdfContentWidth} px</span>
                                 <span style="font-size:0.8rem;color:${c.textFaint};">${t.pdfModalContentWidthWide}</span>
                             </div>
-                            <input type="range" min="580" max="1100" step="20" value="${state.pdfContentWidth}"
+                            <input type="range" aria-label="${t.pdfModalContentWidth}" min="580" max="1100" step="20" value="${state.pdfContentWidth}"
                                 oninput="pdfModalSetContentWidth(this.value)"
                                 style="width:100%;accent-color:#3b82f6;cursor:pointer;">
                         </div>
@@ -3475,8 +3482,8 @@ function pdfModalSetTheme(theme) {
         const btn = document.getElementById('pdf-theme-btn-' + th.slug);
         if (!btn) return;
         const isActive = th.slug === theme;
-        btn.style.background  = isActive ? '#3b82f6' : cardBg;
-        btn.style.borderColor = isActive ? '#3b82f6' : border;
+        btn.style.background  = isActive ? '#2563eb' : cardBg;
+        btn.style.borderColor = isActive ? '#2563eb' : border;
         btn.style.color       = isActive ? '#ffffff' : textMuted;
         btn.style.fontWeight  = isActive ? '700'      : '500';
     });
@@ -3489,7 +3496,7 @@ function pdfModalSetBars(checked) {
     const border = '#3a3a40';
     const bg    = document.getElementById('pdf-toggle-bg');
     const thumb = document.getElementById('pdf-toggle-thumb');
-    if (bg)    bg.style.background = checked ? '#3b82f6' : border;
+    if (bg)    bg.style.background = checked ? '#2563eb' : border;
     if (thumb) thumb.style.left    = checked ? '22px'   : '2px';
     persistSettings();
     updatePdfModalPreview();
@@ -3561,7 +3568,7 @@ function renderPdfPreviewHtml(previewTheme, showBars, contentWidth) {
 function renderLogin() {
     const t = UI[state.lang];
     return `
-        <div class="login-screen">
+        <div class="login-screen" role="main" id="main-content" tabindex="-1">
             <div class="login-card">
                 <div class="login-brand">
                     <img src="/assets/logo-transparent.png" alt="Pwnly">
@@ -3572,15 +3579,15 @@ function renderLogin() {
                 </div>
 
                 <form onsubmit="doLogin(event)" autocomplete="on">
-                    <label class="login-label">${t.loginUser}</label>
+                    <label class="login-label" for="loginUsername">${t.loginUser}</label>
                     <input type="text" id="loginUsername" class="login-input" autocomplete="username"
                            value="${escapeHTML(state.loginUsername)}" oninput="state.loginUsername = this.value" autofocus>
 
-                    <label class="login-label">${t.loginPass}</label>
+                    <label class="login-label" for="loginPassword">${t.loginPass}</label>
                     <input type="password" id="loginPassword" class="login-input" autocomplete="current-password"
                            value="${escapeHTML(state.loginPassword)}" oninput="state.loginPassword = this.value">
 
-                    ${state.loginError ? `<div class="login-error">${escapeHTML(state.loginError)}</div>` : ''}
+                    ${state.loginError ? `<div class="login-error" role="alert">${escapeHTML(state.loginError)}</div>` : ''}
 
                     <button type="submit" class="login-btn" ${state.loginLoading ? 'disabled' : ''}>
                         ${state.loginLoading ? t.loginLoading : t.loginBtn}
@@ -3605,7 +3612,7 @@ function renderLogin() {
 function renderSetup() {
     const t = UI[state.lang];
     return `
-        <div class="login-screen">
+        <div class="login-screen" role="main" id="main-content" tabindex="-1">
             <div class="login-card">
                 <div class="login-brand">
                     <img src="/assets/logo-transparent.png" alt="Pwnly">
@@ -3687,7 +3694,7 @@ function renderAccountPage() {
                 </div>
             </header>
 
-            <div class="account-container">
+            <div class="account-container" role="main" id="main-content" tabindex="-1">
                 <div class="account-card">
                     <div class="account-signed-in">
                         <span class="account-user-avatar account-user-avatar--lg">
@@ -3796,14 +3803,24 @@ function renderPreviewArea() {
     // Conmutador discreto (segmentado) alineado a la derecha sobre el informe.
     const toolbar = `
         <div class="preview-view-switch no-print">
-            <div class="preview-view-seg" role="tablist">
-                <button class="${!src ? 'active' : ''}" onclick="setPreviewView('rendered')" title="${isEs ? 'Vista renderizada' : 'Rendered view'}">
+            <div class="preview-view-seg" role="group" aria-label="${isEs ? 'Tipo de vista' : 'View type'}">
+                <button class="${!src ? 'active' : ''}" aria-pressed="${!src}" onclick="setPreviewView('rendered')" title="${isEs ? 'Vista renderizada' : 'Rendered view'}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
                     <span>${isEs ? 'Renderizado' : 'Rendered'}</span>
                 </button>
-                <button class="${src ? 'active' : ''}" onclick="setPreviewView('source')" title="${isEs ? 'Código fuente HTML' : 'HTML source'}">
+                <button class="${src ? 'active' : ''}" aria-pressed="${src}" onclick="setPreviewView('source')" title="${isEs ? 'Código fuente HTML' : 'HTML source'}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                     <span>${isEs ? 'Código' : 'Source'}</span>
+                </button>
+            </div>
+            <div class="preview-export">
+                <button type="button" class="btn-primary btn-sm preview-export-pdf" onclick="generatePdf()" ${state.generatingPdf ? 'disabled' : ''}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>${isEs ? 'Exportar PDF' : 'Export PDF'}</span>
+                </button>
+                <button type="button" class="btn-secondary btn-sm" onclick="exportHtml()" ${state.exportingHtml ? 'disabled' : ''}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>HTML</span>
                 </button>
             </div>
             ${src ? `<button class="preview-view-copy" onclick="copyReportSource()" title="${isEs ? 'Copiar código' : 'Copy source'}">
@@ -3811,7 +3828,20 @@ function renderPreviewArea() {
             </button>` : ''}
         </div>`;
 
-    if (!src) return toolbar + reportHtml;
+    // Barra inferior (móvil): exportar siempre al alcance del pulgar
+    const fab = `
+        <div class="editor-fab-bar no-print" role="toolbar" aria-label="${isEs ? 'Exportar informe' : 'Export report'}">
+            <button type="button" class="btn-secondary" onclick="exportHtml()" ${state.exportingHtml ? 'disabled' : ''}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>HTML</span>
+            </button>
+            <button type="button" class="btn-primary editor-save" onclick="generatePdf()" ${state.generatingPdf ? 'disabled' : ''}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>${isEs ? 'Exportar PDF' : 'Export PDF'}</span>
+            </button>
+        </div>`;
+
+    if (!src) return toolbar + reportHtml + fab;
 
     const code = escapeHTML(reportSourceForView(reportHtml));
     const sourceView = `
@@ -3822,10 +3852,166 @@ function renderPreviewArea() {
             <pre style="margin:0;padding:1.1rem;overflow:auto;max-height:75vh;"><code style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:0.78rem;line-height:1.6;color:#e2e8f0;white-space:pre;">${code}</code></pre>
         </div>`;
 
-    return toolbar + sourceView;
+    return toolbar + sourceView + fab;
+}
+
+
+// =========================================================================== //
+// ACCESIBILIDAD GLOBAL: foco estable entre renders, diálogos modales,
+// etiquetas, título/idioma del documento y anuncios de cambio de vista
+// =========================================================================== //
+let _a11yUid = 0;
+let _modalWasOpen = false;
+let _modalOpener = null;
+let _lastViewName = '';
+
+function _focusDescriptor() {
+    const a = document.activeElement;
+    const app = document.getElementById('app');
+    if (!a || a === document.body || !app || !app.contains(a)) return null;
+    const d = { tag: a.tagName, id: a.id || null, path: null, text: (a.textContent || '').trim().slice(0, 30), start: null, end: null };
+    if (!d.id) {
+        const p = []; let n = a;
+        while (n && n !== app) { const par = n.parentElement; if (!par) break; p.unshift(Array.prototype.indexOf.call(par.children, n)); n = par; }
+        d.path = p;
+    }
+    try { if (typeof a.selectionStart === 'number') { d.start = a.selectionStart; d.end = a.selectionEnd; } } catch (_) { /* tipos sin selección */ }
+    return d;
+}
+
+function _restoreFocus(d) {
+    if (!d) return;
+    const app = document.getElementById('app');
+    let el = null;
+    if (d.id) { el = document.getElementById(d.id); }
+    else if (d.path && app) {
+        el = app;
+        for (const i of d.path) { el = el && el.children[i]; }
+        const isField = el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+        if (el && (el.tagName !== d.tag || (!isField && (el.textContent || '').trim().slice(0, 30) !== d.text))) el = null;
+    }
+    if (!el || el.disabled) return;
+    try {
+        el.focus({ preventScroll: true });
+        if (d.start != null && el.setSelectionRange) el.setSelectionRange(d.start, d.end);
+    } catch (_) { /* el elemento ya no admite foco */ }
+}
+
+function _viewName() {
+    const es = state.lang === 'es';
+    if (!state.isAuthenticated) return es ? 'Acceso' : 'Sign in';
+    if (state.isAccountView) return es ? 'Cuenta y usuarios' : 'Account and users';
+    if (state.isThemeStudio && state.themeEditor) return es ? 'Estudio de temas' : 'Theme studio';
+    if (state.showReportSelector) return es ? 'Mis reportes' : 'My reports';
+    if (state.showThemesPage) return es ? 'Temas del informe' : 'Report themes';
+    return state.activeTab === 'preview' ? (es ? 'Vista previa' : 'Preview') : (es ? 'Edición' : 'Editor');
+}
+
+function _syncModal(hadModal, opener) {
+    const app = document.getElementById('app');
+    const overlay = app && app.querySelector('.settings-overlay');
+    if (overlay) {
+        const dlg = overlay.querySelector('.settings-modal') || overlay;
+        dlg.setAttribute('role', 'dialog');
+        dlg.setAttribute('aria-modal', 'true');
+        const heading = dlg.querySelector('.settings-modal-header [id], .settings-modal-header span, .settings-modal-header h2, .settings-modal-header h3');
+        if (heading) { if (!heading.id) heading.id = 'a11y-dlg-title-' + (++_a11yUid); dlg.setAttribute('aria-labelledby', heading.id); }
+        Array.from(app.children).forEach(ch => { if (!ch.classList.contains('settings-overlay')) ch.setAttribute('inert', ''); });
+        if (!hadModal) _modalOpener = opener;
+        if (!dlg.contains(document.activeElement)) {
+            const first = dlg.querySelector('[autofocus], input:not([type=hidden]):not([disabled]):not([type=file]), textarea:not([disabled]), select:not([disabled])')
+                || Array.from(dlg.querySelectorAll('button:not([disabled])')).find(b => !b.classList.contains('settings-close-btn'))
+                || dlg;
+            if (first === dlg) dlg.setAttribute('tabindex', '-1');
+            try { first.focus({ preventScroll: true }); } catch (_) { /* sin foco */ }
+        }
+    } else {
+        if (app) Array.from(app.children).forEach(ch => ch.removeAttribute('inert'));
+        if (hadModal && _modalOpener) { _restoreFocus(_modalOpener); _modalOpener = null; }
+    }
+    _modalWasOpen = !!overlay;
+}
+
+function _a11yEnhanceApp() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    // Etiquetas <label> sin "for": enlazar con el control hermano (login/cuenta) o del grupo.
+    app.querySelectorAll('label:not([for])').forEach(l => {
+        if (l.querySelector('input,select,textarea')) return;
+        let c = l.nextElementSibling;
+        while (c && !c.matches('input,select,textarea')) { if (c.matches('label')) { c = null; break; } c = c.nextElementSibling; }
+        if (!c) { const g = l.closest('.form-group'); c = g && g.querySelector('input:not([type=hidden]),select,textarea'); }
+        if (c) { if (!c.id) c.id = 'a11y-f-' + (++_a11yUid); l.setAttribute('for', c.id); }
+    });
+    // Controles sin nombre: placeholder o título.
+    app.querySelectorAll('input:not([type=hidden]), textarea, select').forEach(c => {
+        if (c.getAttribute('aria-label') || c.getAttribute('aria-labelledby') || c.closest('label') || (c.id && app.querySelector('label[for="' + c.id + '"]'))) return;
+        const txt = c.getAttribute('placeholder') || c.getAttribute('title');
+        if (txt) c.setAttribute('aria-label', txt);
+    });
+    // Botones solo-icono: usar su título; el de cerrar de los diálogos siempre tiene nombre.
+    app.querySelectorAll('button').forEach(b => {
+        if (b.getAttribute('aria-label') || (b.textContent || '').trim()) return;
+        if (b.classList.contains('settings-close-btn')) b.setAttribute('aria-label', state.lang === 'es' ? 'Cerrar' : 'Close');
+        else if (b.title) b.setAttribute('aria-label', b.title);
+    });
+    // Bloques con scroll: alcanzables con teclado.
+    app.querySelectorAll('pre, #api-example-block').forEach(el => {
+        if (el.closest('.preview-container')) return;
+        if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) {
+            el.setAttribute('tabindex', '0');
+            if (!el.getAttribute('aria-label') && !el.getAttribute('role')) { el.setAttribute('role', 'region'); el.setAttribute('aria-label', state.lang === 'es' ? 'Bloque de código' : 'Code block'); }
+        }
+    });
+    // Título e idioma del documento + anuncio de cambio de vista (SPA).
+    document.documentElement.lang = state.lang === 'en' ? 'en' : 'es';
+    const name = _viewName();
+    if (name !== _lastViewName) {
+        document.title = name + ' — Pwnly';
+        let live = document.getElementById('a11y-live');
+        if (!live) {
+            live = document.createElement('div');
+            live.id = 'a11y-live'; live.className = 'sr-only';
+            live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
+            document.body.appendChild(live);
+        }
+        if (_lastViewName) live.textContent = name;
+        _lastViewName = name;
+    }
 }
 
 function renderApp() {
+    const before = _focusDescriptor();
+    const hadModal = _modalWasOpen;
+    _renderAppInner();
+    _restoreFocus(before);
+    _syncModal(hadModal, before);
+    _a11yEnhanceApp();
+}
+
+// Teclado global: Esc cierra el diálogo/menú; Tab queda atrapado dentro del diálogo.
+document.addEventListener('keydown', (e) => {
+    const overlay = document.querySelector('#app .settings-overlay');
+    if (e.key === 'Escape') {
+        if (overlay) {
+            const closeBtn = overlay.querySelector('.settings-close-btn');
+            if (closeBtn) { e.preventDefault(); closeBtn.click(); return; }
+        }
+        if (state.exportMenuOpen) { state.exportMenuOpen = false; renderApp(); const b = document.querySelector('.export-dropdown > button'); if (b) b.focus(); }
+        return;
+    }
+    if (e.key === 'Tab' && overlay) {
+        const dlg = overlay.querySelector('.settings-modal') || overlay;
+        const f = Array.from(dlg.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+            .filter(el => el.offsetParent !== null);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && (document.activeElement === first || !dlg.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || !dlg.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    }
+});
+
+function _renderAppInner() {
     const app = $('#app');
 
     // Mientras no se haya comprobado la sesión, no pintamos nada (evita parpadeo
@@ -3857,7 +4043,7 @@ function renderApp() {
     app.innerHTML = `
         ${renderSplashScreen()}
         ${renderNavbar()}
-        <main class="main-content">
+        <main class="main-content" id="main-content" tabindex="-1">
             ${renderReportsPage()}
             ${renderThemesPage()}
             ${renderEditor()}
@@ -3893,7 +4079,7 @@ function renderPasswordWarningModal() {
                     </button>
                 </div>
                 <div class="settings-section">
-                    <p style="font-size:0.88rem;color:var(--gray-500,#6b7280);line-height:1.6;margin:0 0 1.1rem;">
+                    <p style="font-size:0.88rem;color:var(--text-muted,#6b7280);line-height:1.6;margin:0 0 1.1rem;">
                         ${t.pwWarnBody}
                     </p>
                     <div style="display:flex;gap:0.6rem;">
@@ -4219,7 +4405,7 @@ function renderApiSection() {
     ].map(([method, path, desc]) => `
         <tr>
             <td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--border,#e2e8f0);white-space:nowrap;">
-                <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;color:${method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#d97706'};">${method}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:700;color:${method === 'GET' ? '#60a5fa' : method === 'POST' ? '#34d399' : method === 'DELETE' ? '#f87171' : '#fbbf24'};">${method}</span>
             </td>
             <td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--border,#e2e8f0);">
                 <code style="font-size:0.73rem;word-break:break-all;">${path}</code>
@@ -4440,6 +4626,7 @@ async function executePdfGeneration() {
     if (state.generatingPdf) return;
     const isEs = state.lang === 'es';
 
+    const win = window.open('about:blank', '_blank');   // dentro del gesto: evita el bloqueo de pop-ups en móvil
     state.showPdfModal = false;
     state.generatingPdf = true;
     renderApp();
@@ -4449,13 +4636,16 @@ async function executePdfGeneration() {
         if (!state.currentReportId) {
             throw new Error(isEs ? 'No se pudo guardar el reporte' : 'Could not save the report');
         }
-        const win = window.open('/?' + _reportPrintParams({ auto_print: '1' }).toString(), '_blank');
-        if (!win) {
+        const url = '/?' + _reportPrintParams({ auto_print: '1' }).toString();
+        if (win && !win.closed) {
+            win.location.href = url;
+        } else {
             alert(isEs
                 ? 'Permite las ventanas emergentes para generar el PDF (se abrirá el diálogo de impresión → Guardar como PDF).'
                 : 'Allow pop-ups to generate the PDF (the print dialog will open → Save as PDF).');
         }
     } catch (e) {
+        try { if (win) win.close(); } catch (_) { /* ya cerrada */ }
         alert((isEs ? 'Error al generar PDF: ' : 'Error generating PDF: ') + e.message);
     } finally {
         state.generatingPdf = false;
@@ -4681,6 +4871,8 @@ function showToast(message, type = 'success') {
     if (!host) {
         host = document.createElement('div');
         host.id = 'ptf-toast-host';
+        host.setAttribute('role', 'status');
+        host.setAttribute('aria-live', 'polite');
         host.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;';
         document.body.appendChild(host);
     }
@@ -5075,20 +5267,50 @@ async function deleteReport(id) {
 // interna: no se exporta como fichero. Opcionalmente se cifra en el navegador
 // (PBKDF2 → AES-256-GCM) antes de descargarla.
 // =========================================================================== //
-const BK_ENC_MAGIC = 'PWNLYBK1';           // 8 bytes: copia cifrada
+const BK_ENC_MAGIC = 'PWNLYBK2';           // 8 bytes: copia cifrada (formato actual)
+const BK_ENC_MAGIC_V1 = 'PWNLYBK1';        // formato previo (310k iteraciones, cabecera sin autenticar)
+const BK_PBKDF2_ITER = 600000;             // recomendación OWASP para PBKDF2-HMAC-SHA256
 const BK_MIN_PASSWORD = 8;
 
 // Deriva una clave AES-GCM de 256 bits a partir de la contraseña (PBKDF2-SHA256).
-async function deriveBackupKey(password, salt) {
+async function deriveBackupKey(password, salt, iterations) {
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
         keyMaterial,
         { name: 'AES-GCM', length: 256 },
         false,
         ['encrypt', 'decrypt']
     );
+}
+
+// Formato v2:  magic(8) | iteraciones u32 BE (4) | salt(16) | iv(12) | ciphertext+tag
+// La cabecera (magic+iteraciones) se autentica como datos asociados de AES-GCM.
+async function encryptBackupBytes(plain, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const header = new Uint8Array(12);
+    header.set(new TextEncoder().encode(BK_ENC_MAGIC), 0);
+    new DataView(header.buffer).setUint32(8, BK_PBKDF2_ITER, false);
+    const key = await deriveBackupKey(password, salt, BK_PBKDF2_ITER);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: header }, key, plain));
+    const out = new Uint8Array(header.length + salt.length + iv.length + ct.length);
+    out.set(header, 0); out.set(salt, 12); out.set(iv, 28); out.set(ct, 40);
+    return out;
+}
+
+async function decryptBackupBytes(bytes, password) {
+    const magic = new TextDecoder().decode(bytes.slice(0, 8));
+    if (magic === BK_ENC_MAGIC_V1) {
+        const key = await deriveBackupKey(password, bytes.slice(8, 24), 310000);
+        return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(24, 36) }, key, bytes.slice(36)));
+    }
+    const header = bytes.slice(0, 12);
+    const iter = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(8, false);
+    if (iter < 100000 || iter > 5000000) throw new Error('bad-iterations');   // evita un DoS por cabecera manipulada
+    const key = await deriveBackupKey(password, bytes.slice(12, 28), iter);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(28, 40), additionalData: header }, key, bytes.slice(40)));
 }
 
 function _downloadBytes(bytes, filename, mime) {
@@ -5122,11 +5344,11 @@ function _bk() {
         reports: 'reportes', findings: 'hallazgos', themes: 'temas', templates: 'plantillas', images: 'imágenes',
         excluded: 'No incluye usuarios, contraseñas ni API keys: tus cuentas actuales no cambian.',
         warnings: 'Avisos', howTitle: 'Cómo importar',
-        merge: 'Añadir a lo existente', mergeDesc: 'Recomendado. Los reportes se añaden como copias nuevas; temas y plantillas con el mismo identificador se omiten. No se borra nada.',
+        merge: 'Añadir a lo existente', mergeDesc: 'Recomendado. Añade lo que falta: los reportes, temas y plantillas que ya existen se omiten, así que importar dos veces no duplica nada. No se borra nada.',
         replace: 'Reemplazar todo el contenido', replaceDesc: 'Elimina los reportes, temas y plantillas actuales y restaura los de la copia, incluidos los ajustes.',
         replaceConfirm: 'Entiendo que se borrarán los reportes, temas y plantillas actuales.',
         importNow: 'Importar', importing: 'Importando…', importError: 'Error al importar: ',
-        doneTitle: 'Importación completada', imported: 'Importado', skipped: 'Omitidos por duplicado', reload: 'Recargar la aplicación',
+        doneTitle: 'Importación completada', imported: 'Importado', skipped: 'Omitidos (ya existían)', reload: 'Recargar la aplicación',
         validating: 'Validando la copia…', step: 'Paso'
     } : {
         title: 'Backup', exportBtn: 'Export backup', importBtn: 'Import backup',
@@ -5145,11 +5367,11 @@ function _bk() {
         reports: 'reports', findings: 'findings', themes: 'themes', templates: 'templates', images: 'images',
         excluded: 'Users, passwords and API keys are not included: your current accounts stay as they are.',
         warnings: 'Warnings', howTitle: 'How to import',
-        merge: 'Add to existing', mergeDesc: 'Recommended. Reports are added as new copies; themes and templates with the same identifier are skipped. Nothing is deleted.',
+        merge: 'Add to existing', mergeDesc: 'Recommended. Adds what is missing: reports, themes and templates that already exist are skipped, so importing twice never duplicates anything. Nothing is deleted.',
         replace: 'Replace all content', replaceDesc: 'Deletes current reports, themes and templates and restores those in the backup, including settings.',
         replaceConfirm: 'I understand current reports, themes and templates will be deleted.',
         importNow: 'Import', importing: 'Importing…', importError: 'Import error: ',
-        doneTitle: 'Import complete', imported: 'Imported', skipped: 'Skipped (duplicates)', reload: 'Reload the app',
+        doneTitle: 'Import complete', imported: 'Imported', skipped: 'Skipped (already existed)', reload: 'Reload the app',
         validating: 'Validating the backup…', step: 'Step'
     };
 }
@@ -5183,14 +5405,7 @@ async function submitBackupExport(event) {
         if (!pw) {
             _downloadBytes(zipBytes, name, 'application/zip');
         } else {
-            const salt = crypto.getRandomValues(new Uint8Array(16));
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const key = await deriveBackupKey(pw, salt);
-            const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, zipBytes));
-            const magic = new TextEncoder().encode(BK_ENC_MAGIC);
-            const out = new Uint8Array(magic.length + salt.length + iv.length + ct.length);
-            out.set(magic, 0); out.set(salt, magic.length); out.set(iv, magic.length + salt.length); out.set(ct, magic.length + salt.length + iv.length);
-            _downloadBytes(out, name + '.enc', 'application/octet-stream');
+            _downloadBytes(await encryptBackupBytes(zipBytes, pw), name + '.enc', 'application/octet-stream');
         }
         state.backupModal = _bkInit(); renderApp();
         showToast(pw ? b.exportedEnc : b.exported);
@@ -5210,7 +5425,7 @@ async function pickBackupFile(input) {
     try {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const head = new TextDecoder().decode(bytes.slice(0, 16));
-        if (head.startsWith(BK_ENC_MAGIC)) {
+        if (head.startsWith(BK_ENC_MAGIC) || head.startsWith(BK_ENC_MAGIC_V1)) {
             state.backupModal.bytes = bytes; state.backupModal.needsPassword = true; state.backupModal.busy = false;
             renderApp();
             setTimeout(() => { const el = document.getElementById('bkImpPw'); if (el) el.focus(); }, 30);
@@ -5236,11 +5451,7 @@ async function decryptBackupFile(event) {
     if (!pw) return;
     state.backupModal.busy = true; state.backupModal.error = ''; renderApp();
     try {
-        const bytes = state.backupModal.bytes;
-        const salt = bytes.slice(8, 24), iv = bytes.slice(24, 36), ct = bytes.slice(36);
-        const key = await deriveBackupKey(pw, salt);
-        const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-        state.backupModal.bytes = new Uint8Array(dec);
+        state.backupModal.bytes = await decryptBackupBytes(state.backupModal.bytes, pw);
         state.backupModal.needsPassword = false;
         await previewBackup();
     } catch (e) {
@@ -5319,7 +5530,7 @@ function renderBackupModal() {
         body = `
             <div class="bk-done" role="status">
                 <p class="bk-text"><b>${b.imported}:</b> ${countLine(r.imported)}</p>
-                ${(r.skipped.themes || r.skipped.finding_templates) ? `<p class="bk-text"><b>${b.skipped}:</b> ${r.skipped.themes} ${b.themes}, ${r.skipped.finding_templates} ${b.templates}</p>` : ''}
+                ${(r.skipped.reports || r.skipped.themes || r.skipped.finding_templates) ? `<p class="bk-text"><b>${b.skipped}:</b> ${r.skipped.reports} ${b.reports}, ${r.skipped.themes} ${b.themes}, ${r.skipped.finding_templates} ${b.templates}</p>` : ''}
                 ${r.warnings.length ? `<p class="bk-hint">${r.warnings.map(escapeHTML).join('<br>')}</p>` : ''}
             </div>
             <div class="bk-actions"><button type="button" class="btn-primary" onclick="window.location.reload()">${b.reload}</button></div>`;
@@ -5380,9 +5591,6 @@ function renderBackupModal() {
         </div>`;
 }
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && state.backupModal && state.backupModal.open && !state.backupModal.busy) closeBackupModal();
-});
 
 
 async function saveCurrentReport(silent = false) {

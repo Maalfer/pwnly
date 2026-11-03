@@ -6254,3 +6254,121 @@ html[data-theme="dark"] .bk-modal :focus-visible { outline: 2px solid #60a5fa; o
 .bk-mode small { font-weight: 400; }
 .bk-modal .bk-actions { position: sticky; bottom: 0; z-index: 2; padding-top: 0.9rem; padding-bottom: 0.2rem; }
 html[data-theme="dark"] .bk-modal .bk-actions { background: linear-gradient(to bottom, rgba(35,35,38,0), #232326 28%); }
+
+/* ==========================================================================
+   ACCESIBILIDAD, NAVEGACIÓN MÓVIL Y EXPORTAR EN VISTA PREVIA
+   ========================================================================== */
+/* Salto de contenido */
+.skip-link {
+    position: absolute; left: -9999px; top: 0; z-index: 3000;
+    background: #2563eb; color: #fff; padding: 0.75rem 1rem; border-radius: 0 0 10px 0;
+    font-weight: 700; text-decoration: none;
+}
+.skip-link:focus { left: 0; outline: 3px solid #fff; outline-offset: -3px; }
+#main-content:focus { outline: none; }
+
+/* Navbar: pestañas (nav) + herramientas (exportar, ajustes, cuenta) */
+.navbar-actions { align-items: center; }
+.navbar-tabs, .navbar-tools { display: flex; align-items: center; gap: 0.5rem; }
+
+/* Contraste AA (>= 4.5:1) de botones y textos */
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .btn-primary,
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .login-btn,
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .navbar-actions button.btn-primary,
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .cvss-opt.active {
+    background: #2563eb !important; border-color: #2563eb !important; color: #fff !important;
+}
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .btn-primary:hover:not(:disabled),
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .login-btn:hover:not(:disabled),
+html[data-theme="dark"][data-theme="dark"][data-theme="dark"] .navbar-actions button.btn-primary:hover {
+    background: #1d4ed8 !important; border-color: #1d4ed8 !important;
+}
+html[data-theme="dark"] { --text-muted: #a1a1aa; }
+html[data-theme="dark"] legend,
+html[data-theme="dark"] .pro-fields-details > summary,
+html[data-theme="dark"] .cvss-metric > span,
+html[data-theme="dark"] .settings-modal li { color: #b4b4bd; }
+html[data-theme="dark"] .login-version { color: #a1a1aa; }
+html[data-theme="dark"] .finding-item.severity-crit .finding-severity { color: #fca5a5; background: rgba(248,113,113,0.16); }
+html[data-theme="dark"] .finding-item.severity-high .finding-severity { color: #fdba74; background: rgba(251,146,60,0.16); }
+html[data-theme="dark"] .finding-item.severity-med .finding-severity { color: #fde047; background: rgba(250,204,21,0.14); }
+html[data-theme="dark"] .finding-item.severity-low .finding-severity { color: #86efac; background: rgba(74,222,128,0.14); }
+html[data-theme="dark"] .finding-item.severity-info .finding-severity { color: #d4d4d8; background: rgba(161,161,170,0.16); }
+html[data-theme="dark"] #cvss-live-vector { color: #fff; }
+html[data-theme="dark"] .preview-view-seg button { color: #374151; }
+html[data-theme="dark"] .preview-view-seg button.active { color: #1d4ed8; }
+
+/* Tarjetas de reporte: enlace estirado accesible por teclado */
+.report-card { position: relative; }
+.report-card-title { color: #0f172a; margin: 0 0 0.375rem; font-size: 0.9375rem; font-weight: 700; letter-spacing: -0.01em; }
+html[data-theme="dark"] .report-card .report-card-title { color: #f4f4f5 !important; }
+.report-open {
+    all: unset; cursor: pointer; display: inline; color: inherit; font: inherit; letter-spacing: inherit;
+}
+.report-open::after { content: ''; position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.report-card .report-card-actions { z-index: 3; }
+.report-card:focus-within { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.report-open:focus-visible { outline: none; }
+
+/* Interruptor del modal PDF: el foco del teclado se ve sobre el propio control */
+label:has(> input[role="switch"]:focus-visible) > #pdf-toggle-bg { outline: 2px solid #60a5fa; outline-offset: 3px; }
+label:has(> input[role="switch"]) { position: relative; }
+
+/* Vista previa: acciones de exportación */
+.preview-export { display: inline-flex; gap: 0.45rem; align-items: center; margin-right: auto; }
+.preview-export .btn-sm { min-height: 40px; display: inline-flex; align-items: center; gap: 0.45rem; }
+.preview-view-switch { gap: 0.6rem; flex-wrap: wrap; }
+html[data-theme="dark"] .preview-view-switch :focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+
+/* Casillas del importador: objetivo táctil >= 24px */
+.bk-confirm input, .bk-mode input { width: 24px; height: 24px; }
+
+/* ---- Móvil: navbar en dos filas (marca + herramientas / pestañas) ---- */
+@media screen and (max-width: 768px) {
+    html .navbar {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "brand tools" "tabs tabs";
+        align-items: center;
+        gap: 0.4rem 0.5rem;
+    }
+    .navbar-brand { grid-area: brand; min-width: 0; }
+    .navbar-brand .app-version-badge { display: none; }
+    html .navbar-actions { display: contents !important; }
+    .navbar-tools { grid-area: tools; gap: 0.35rem; }
+    .navbar-tabs {
+        grid-area: tabs; display: flex; gap: 0.4rem; overflow-x: auto; scrollbar-width: none;
+        -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+    }
+    .navbar-tabs::-webkit-scrollbar { display: none; }
+    .navbar-tabs button { flex: 0 0 auto; min-height: 40px; }
+    .navbar-tools .pdf-btn { min-height: 40px; padding: 0.4rem 0.7rem; }
+    .navbar-tools .settings-btn { min-width: 40px; min-height: 40px; }
+    .export-dropdown .export-menu { right: 0; left: auto; min-width: 200px; }
+    /* Vista previa: la barra inferior ofrece Exportar PDF/HTML; la de arriba se simplifica */
+    .preview-export { display: none; }
+    .preview-view-switch { justify-content: flex-end; }
+    .main-content:has(.preview-view-switch) { padding-bottom: 5.5rem; }
+}
+@media screen and (max-width: 380px) {
+    .navbar-tools .pdf-btn { padding: 0.4rem 0.55rem; }
+}
+
+/* Variables de la interfaz (panel de API, etc.). El informe NO las hereda:
+   se anulan dentro de .preview-container para que sus fallbacks sigan mandando. */
+html[data-theme="dark"] { --input-bg: #1c1c1f; --border: #3a3a40; --card: #232326; --accent: #60a5fa; --bg-card: #232326; }
+.preview-container, #_pdf_inner { --input-bg: initial; --border: initial; --card: initial; --accent: initial; --bg-card: initial; --text-muted: initial; }
+.report-open, .report-open:hover, .report-open:active, .report-open:focus {
+    background: transparent !important; color: inherit !important; border: 0 !important;
+    box-shadow: none !important; transform: none !important; padding: 0 !important;
+}
+
+/* Mis Reportes en móvil: título arriba y acciones en una cuadrícula que no desborda */
+@media (max-width: 760px) {
+    .reports-header { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+    .reports-actions { display: grid; grid-template-columns: 1fr; gap: 0.5rem; width: 100%; }
+    .reports-actions button { min-height: 44px; justify-content: center; width: 100%; }
+}
+@media (min-width: 420px) and (max-width: 760px) {
+    .reports-actions { grid-template-columns: 1fr 1fr; }
+}

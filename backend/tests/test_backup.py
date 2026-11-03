@@ -113,14 +113,23 @@ class TestRoundTrip:
         assert findings[0]["images"] == [PNG_URL, PNG_URL] and findings[0]["image_captions"] == ["a", "b"]
         assert [t["slug"] for t in client.get("/api/themes").json()] == ["mio"]
 
-    def test_merge_adds_and_skips_existing_slugs(self, client):
+    def test_merge_is_idempotent_and_skips_existing_slugs(self, client):
         _make_report(client)
         client.post("/api/themes", json={"slug": "mio", "name": "Mio", "html_template": "", "custom_css": ""})
         blob = _export(client)
         res = _import(client, blob, mode="merge").json()
-        assert res["skipped"]["themes"] == 1
-        assert len(client.get("/api/reports").json()) == 2          # se añade, nunca se pisa
+        assert res["skipped"] == {"reports": 1, "themes": 1, "finding_templates": 0}
+        assert res["imported"]["reports"] == 0 and res["imported"]["findings"] == 0
+        assert len(client.get("/api/reports").json()) == 1          # re-importar la misma copia no duplica
         assert len(client.get("/api/themes").json()) == 1
+
+    def test_merge_adds_a_report_that_changed_since_the_backup(self, client):
+        r = _make_report(client)
+        blob = _export(client)
+        client.put(f"/api/reports/{r['id']}", json={"document_title": "Renombrado", "client_company": "ACME"})
+        res = _import(client, blob, mode="merge").json()
+        assert res["imported"]["reports"] == 1 and res["imported"]["findings"] == 2
+        assert sorted(x["document_title"] for x in client.get("/api/reports").json()) == ["Informe A", "Renombrado"]
 
     def test_replace_wipes_previous_content(self, client):
         _make_report(client, "Antiguo")

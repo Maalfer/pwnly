@@ -505,11 +505,15 @@ def read_archive(path: str) -> ParsedBackup:
 # =========================================================================== #
 def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
     """Aplica la copia ya validada. mode: 'merge' (añadir) | 'replace' (reemplazar el contenido).
-    Los usuarios y API keys NUNCA se tocan. Todo o nada: ante un error, rollback."""
+    Los usuarios y API keys NUNCA se tocan. Todo o nada: ante un error, rollback.
+
+    'merge' es idempotente: un reporte que ya existe (mismo título, cliente y fecha de
+    creación original) se omite, así que importar dos veces la misma copia no duplica nada."""
     if mode not in ("merge", "replace"):
         raise BackupError("Modo de importación no válido", 400)
 
-    skipped = {"themes": 0, "finding_templates": 0}
+    imported = {"reports": 0, "findings": 0, "themes": 0, "finding_templates": 0}
+    skipped = {"reports": 0, "themes": 0, "finding_templates": 0}
     try:
         if mode == "replace":
             db.query(models.Finding).delete(synchronize_session=False)
@@ -518,7 +522,16 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
             db.query(models.FindingTemplate).delete(synchronize_session=False)
             db.flush()
 
+        # La copia guarda fechas a precisión de segundos; se compara igual en ambos lados.
+        existing_reports = {
+            (t, c, ca.replace(microsecond=0) if ca else None) for (t, c, ca) in db.query(
+                models.Report.document_title, models.Report.client_company, models.Report.created_at).all()
+        }
         for report, findings, meta in parsed.reports:
+            key = (report.document_title, report.client_company, meta["created_at"])
+            if meta["created_at"] and key in existing_reports:
+                skipped["reports"] += 1
+                continue
             row = models.Report(**report.model_dump())
             if meta["created_at"]:
                 row.created_at = meta["created_at"]
@@ -526,6 +539,8 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
                 row.updated_at = meta["updated_at"]
             db.add(row)
             db.flush()
+            existing_reports.add(key)
+            imported["reports"] += 1
             for idx, (f, fmeta) in enumerate(findings):
                 frow = models.Finding(**f.model_dump(exclude={"order_index"}), report_id=row.id, order_index=f.order_index or idx)
                 if fmeta["created_at"]:
@@ -533,6 +548,7 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
                 if fmeta["updated_at"]:
                     frow.updated_at = fmeta["updated_at"]
                 db.add(frow)
+                imported["findings"] += 1
 
         existing_themes = {s for (s,) in db.query(models.Theme.slug).all()}
         for theme, meta in parsed.themes:
@@ -544,6 +560,7 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
                 row.created_at = meta["created_at"]
             db.add(row)
             existing_themes.add(theme.slug)
+            imported["themes"] += 1
 
         existing_tpls = {s for (s,) in db.query(models.FindingTemplate.slug).all()}
         for tpl, meta in parsed.templates:
@@ -555,6 +572,7 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
                 row.created_at = meta["created_at"]
             db.add(row)
             existing_tpls.add(tpl.slug)
+            imported["finding_templates"] += 1
 
         settings_applied = False
         if mode == "replace" and parsed.settings is not None:
@@ -575,13 +593,14 @@ def apply_backup(db: Session, parsed: ParsedBackup, mode: str) -> dict:
         db.rollback()
         raise
 
-    s = parsed.summary()
+    summary = parsed.summary()
+    imported["assets"] = summary["counts"]["assets"]
     return {
         "mode": mode,
-        "imported": s["counts"],
+        "imported": imported,
         "skipped": skipped,
         "settings_applied": settings_applied,
-        "warnings": s["warnings"],
+        "warnings": summary["warnings"],
     }
 
 

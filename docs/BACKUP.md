@@ -38,17 +38,30 @@ modifica tus cuentas. El tema por defecto (`default`) está integrado en la app 
 ## Cifrado opcional
 
 Al exportar puedes definir una contraseña (mínimo 8 caracteres). El cifrado se hace **en el
-navegador**: PBKDF2-SHA256 (310 000 iteraciones) → AES-256-GCM. El archivo resultante
-(`.zip.enc`, cabecera `PWNLYBK1`) se descifra en el navegador al importarlo; el servidor solo
-ve el ZIP ya descifrado. Si pierdes la contraseña, no hay forma de recuperar la copia.
+navegador**: PBKDF2-SHA256 (600 000 iteraciones) → AES-256-GCM. El archivo resultante
+(`.zip.enc`) se descifra en el navegador al importarlo; el servidor solo ve el ZIP ya descifrado.
+Si pierdes la contraseña, no hay forma de recuperar la copia.
+
+Formato del archivo cifrado (`PWNLYBK2`):
+
+```
+magic "PWNLYBK2" (8) | iteraciones, u32 big-endian (4) | salt (16) | iv (12) | ciphertext + tag
+```
+
+La cabecera (magic + iteraciones) se autentica como datos asociados de AES-GCM, de modo que
+manipularla invalida el archivo; al descifrar se acota el número de iteraciones para evitar
+cabeceras maliciosas que bloqueen el navegador. Las copias `PWNLYBK1` (310 000 iteraciones) siguen
+pudiéndose importar.
 
 ## Importar
 
 1. Se sube el archivo y se **valida por completo sin escribir nada** (vista previa con fecha,
    versión de Pwnly, recuentos, reportes incluidos y avisos).
 2. Eliges el modo:
-   - **Añadir a lo existente** (recomendado): los reportes se añaden como copias nuevas;
-     temas y plantillas con el mismo identificador se omiten. No se borra nada.
+   - **Añadir a lo existente** (recomendado): añade lo que falta y es **idempotente**: un reporte
+     que ya existe (mismo título, cliente y fecha de creación original) y los temas/plantillas con
+     el mismo identificador se omiten, así que importar dos veces la misma copia no duplica nada.
+     No se borra nada.
    - **Reemplazar todo el contenido**: elimina reportes, temas y plantillas actuales y restaura
      los de la copia, incluidos los ajustes. Pide confirmación explícita.
 3. La importación es **todo o nada**: se aplica en una única transacción y, si algo falla,
