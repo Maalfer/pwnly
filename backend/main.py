@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,12 +10,12 @@ import os
 import secrets
 import sys
 import tempfile
-import shutil
 import threading
 import time as _time
 from datetime import datetime
-import models, schemas, database, auth
-from database import engine, get_db, db_path
+import models, schemas, database, auth, backup
+from starlette.background import BackgroundTask
+from database import engine, get_db
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not os.path.exists(os.path.join(BASE_DIR, "index.html")):
@@ -986,151 +986,63 @@ def create_demo_report(db: Session = Depends(get_db), _user: models.User = Depen
     return {"report_id": rid, "findings_count": len(findings)}
 
 
-@app.get("/api/database/export")
-def export_database(_user: models.User = Depends(auth.require_auth)):
-    if not os.path.exists(db_path):
-        raise HTTPException(status_code=404, detail="Base de datos no encontrada")
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"pwnly_backup_{timestamp}.db"
-    
+# --------------------------------------------------------------------------- #
+# Copias de seguridad (ZIP: manifest + JSON + imágenes). La base de datos SQLite es
+# la única fuente de verdad y NO se exporta como fichero. Ver backup.py.
+# --------------------------------------------------------------------------- #
+@app.get("/api/backup/export")
+def export_backup(db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
+    fd, tmp_path = tempfile.mkstemp(suffix=".zip", prefix="pwnly-export-")
+    os.close(fd)
+    try:
+        backup.build_archive(db, tmp_path)
+    except Exception as e:
+        os.remove(tmp_path)
+        print(f"[Pwnly] Error al generar la copia de seguridad: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail="No se pudo generar la copia de seguridad")
+
+    filename = f"pwnly-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
     return FileResponse(
-        db_path,
-        media_type="application/x-sqlite3",
-        filename=filename
+        tmp_path,
+        media_type="application/zip",
+        filename=filename,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        background=BackgroundTask(os.remove, tmp_path),
     )
 
 
-@app.post("/api/database/import")
-def import_database(file: UploadFile = File(...), db: Session = Depends(get_db), _user: models.User = Depends(auth.require_auth)):
-    if not file.filename.endswith('.db'):
-        raise HTTPException(status_code=400, detail="El archivo debe tener extensión .db")
-    
-    backup_path = None
-    if os.path.exists(db_path):
-        backup_path = f"{db_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        shutil.copy2(db_path, backup_path)
-    
+@app.post("/api/backup/import")
+def import_backup(
+    file: UploadFile = File(...),
+    mode: str = Form("merge"),
+    dry_run: bool = Form(False),
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(auth.require_auth),
+):
+    """Importa una copia ZIP. `dry_run=true` solo valida y devuelve el resumen (no escribe).
+    mode: "merge" añade el contenido a lo existente; "replace" sustituye reportes, temas
+    y plantillas (los usuarios y API keys nunca se tocan). Todo o nada."""
+    if mode not in ("merge", "replace"):
+        raise HTTPException(status_code=400, detail="Modo de importación no válido")
+    tmp_path = None
     try:
-        # mkstemp crea el fichero de forma atómica con permisos 0600 y nombre no
-        # predecible (mktemp estaba deprecado por race condition / nombre adivinable).
-        _tmp_fd, temp_path = tempfile.mkstemp(suffix=".db")
-        os.close(_tmp_fd)
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        import sqlite3
-        import json
-        try:
-            conn = sqlite3.connect(temp_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
-
-            required_tables = {'reports', 'findings'}
-            if not required_tables.issubset(set(tables)):
-                conn.close()
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"La base de datos no tiene las tablas requeridas. Tablas encontradas: {tables}"
-                )
-
-            # El .db importado no pasa por los schemas, así que saneamos aquí
-            # client_logo/images para no almacenar URLs que provoquen SSRF o XSS.
-            def _sanitize_json_column(table, column, keep_slots):
-                cursor.execute(f"SELECT id, {column} FROM {table}")
-                for row_id, raw in cursor.fetchall():
-                    try:
-                        values = json.loads(raw) if raw else []
-                    except (TypeError, ValueError):
-                        values = []
-                    if not isinstance(values, list):
-                        values = []
-                    cleaned = schemas.sanitize_image_list(values, keep_slots=keep_slots)
-                    cursor.execute(
-                        f"UPDATE {table} SET {column} = ? WHERE id = ?",
-                        (json.dumps(cleaned), row_id),
-                    )
-
-            _sanitize_json_column("reports", "client_logo", keep_slots=True)
-            _sanitize_json_column("findings", "images", keep_slots=False)
-
-            # Saneamos la plantilla HTML y el CSS de temas importados: se
-            # renderizan/inyectan en el navegador, así que un .db malicioso
-            # podría colar <script>/CSS peligroso.
-            if "themes" in tables:
-                theme_cols = [r[1] for r in cursor.execute("PRAGMA table_info(themes)").fetchall()]
-                has_html = "html_template" in theme_cols
-                has_css = "custom_css" in theme_cols
-                if has_html or has_css:
-                    cols = ["id"] + (["html_template"] if has_html else []) + (["custom_css"] if has_css else [])
-                    sel = f"SELECT {', '.join(cols)} FROM themes"
-                    for row in cursor.execute(sel).fetchall():
-                        row_id = row[0]
-                        i = 1
-                        if has_html:
-                            cursor.execute("UPDATE themes SET html_template = ? WHERE id = ?",
-                                           (schemas.sanitize_html_template(row[i] or ""), row_id))
-                            i += 1
-                        if has_css:
-                            cursor.execute("UPDATE themes SET custom_css = ? WHERE id = ?",
-                                           (schemas.sanitize_css_source(row[i] or ""), row_id))
-
-            # Normalizamos la tabla 'users' importada: descartamos cuentas cuyo
-            # hash de contraseña no tenga el formato PBKDF2 esperado. Un .db
-            # manipulado podría traer credenciales con hashes arbitrarios; así
-            # sólo sobreviven cuentas verificables por el flujo normal de login.
-            if "users" in tables:
-                user_cols = [r[1] for r in cursor.execute("PRAGMA table_info(users)").fetchall()]
-                if "password_hash" in user_cols:
-                    for uid, phash in cursor.execute("SELECT id, password_hash FROM users").fetchall():
-                        if not auth.is_valid_password_hash(phash):
-                            cursor.execute("DELETE FROM users WHERE id = ?", (uid,))
-
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"[Pwnly] Import: archivo SQLite inválido: {e}", file=sys.stderr)
-            raise HTTPException(status_code=400, detail="El archivo no es una base de datos SQLite válida")
-        
-        db.close()
-
-        shutil.copy2(temp_path, db_path)
-
-        os.remove(temp_path)
-
-        # El .db importado puede ser de una versión anterior: aseguramos que
-        # tenga todas las tablas/columnas nuevas (themes, finding_templates, …).
-        try:
-            models.Base.metadata.create_all(bind=engine)
-            from migrations import run_migrations as _run_migrations
-            _run_migrations(engine)
-        except Exception as _e:
-            print(f"⚠️  Post-import schema sync: {_e}")
-
-        return JSONResponse(
-            content={
-                "message": "Base de datos importada correctamente",
-                "filename": file.filename,
-                "backup_created": backup_path is not None,
-                "backup_path": backup_path
-            }
-        )
-        
+        tmp_path = backup.save_upload_to_temp(file.file)
+        parsed = backup.read_archive(tmp_path)
+        if dry_run:
+            return {"dry_run": True, "mode": mode, **parsed.summary()}
+        result = backup.apply_backup(db, parsed, mode)
+        return {"dry_run": False, **result}
+    except backup.BackupError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
     except HTTPException:
-        # Restaurar backup si existe
-        if backup_path and os.path.exists(backup_path):
-            shutil.copy2(backup_path, db_path)
-            os.remove(backup_path)
         raise
     except Exception as e:
-        # Restaurar backup si existe
-        if backup_path and os.path.exists(backup_path):
-            shutil.copy2(backup_path, db_path)
-            os.remove(backup_path)
-        # El detalle (ruta, error SQL...) sólo va al log; al cliente, mensaje genérico.
-        print(f"[Pwnly] Error al importar la base de datos: {e}", file=sys.stderr)
-        raise HTTPException(status_code=500, detail="No se pudo importar la base de datos")
+        # El detalle va sólo al log; al cliente, un mensaje genérico.
+        print(f"[Pwnly] Error al importar la copia de seguridad: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail="No se pudo importar la copia de seguridad")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 # --------------------------------------------------------------------------- #

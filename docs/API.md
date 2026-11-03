@@ -64,6 +64,15 @@ Todas las peticiones y respuestas usan `application/json`.
 | `POST` | `/api/finding-templates` | Crea o actualiza una plantilla por `slug` |
 | `DELETE` | `/api/finding-templates/{template_id}` | Elimina una plantilla |
 
+### Copias de seguridad
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/api/backup/export` | Descarga un ZIP portable (manifest + JSON + imágenes). No incluye usuarios ni API keys |
+| `POST` | `/api/backup/import` | Importa un ZIP (`multipart`: `file`, `mode=merge\|replace`, `dry_run=true\|false`) |
+
+Formato, límites y ejemplos en [BACKUP.md](BACKUP.md).
+
 ## Crear un reporte
 
 ```bash

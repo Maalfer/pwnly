@@ -53,7 +53,7 @@ pwnly/
         ├── test_findings_reorder.py
         ├── test_findings_delete_reorder.py
         ├── test_pdf_export.py
-        ├── test_database_io.py
+        ├── test_backup.py
         └── test_static_files.py
 ```
 
@@ -98,10 +98,10 @@ El servidor estará disponible en: `http://localhost:8000`
 
 ## Base de Datos
 
-Los datos se almacenan en `pwnly.db` (SQLite) con dos tablas:
-
-- **reports** - Datos generales del reporte (cliente, fecha, etc.)
-- **findings** - Vulnerabilidades asociadas a cada reporte
+Todo se guarda en **una única base de datos interna** (`pwnly.db`, SQLite): reportes, hallazgos,
+temas, plantillas y ajustes. La base de datos no se exporta como fichero; para respaldar o mover
+tu información se usa una **copia de seguridad portable** (`.zip` con `manifest.json`, JSON e
+imágenes como ficheros, con cifrado opcional). Ver [docs/BACKUP.md](docs/BACKUP.md).
 
 ## API REST
 
@@ -192,7 +192,7 @@ La suite de tests incluye:
 - **Hallazgos**: CRUD y reordenamiento de hallazgos
 - **Reordenamiento**: Tests específicos para orden de hallazgos
 - **Ajustes**: Preferencias globales persistidas en la BD
-- **Base de Datos**: Import/export de backups SQLite
+- **Copias de seguridad**: exportación/importación en ZIP (formato, integridad, rechazo de archivos manipulados)
 - **Archivos Estáticos**: CSS, JS y assets
 
 ## 🛠️ Tecnologías

@@ -86,7 +86,6 @@ const state = {
     exportingHtml: false,
     exportMenuOpen: false,
     previewSourceView: false,
-    dbPasswordModal: { open: false, reportId: null, title: '', busy: false },
     showDemoModal: false,
     showPdfModal: false,
     showRevisionModal: false,
@@ -166,8 +165,8 @@ const UI = {
         myReports: 'Mis Reportes',
         backToEditor: 'Volver al Editor',
         createNewReport: 'Crear Nuevo Reporte',
-        generateDemoDb: 'Generar DB de prueba',
-        demoModalTitle: 'Generar Base de Datos de Prueba',
+        generateDemoDb: 'Reporte de ejemplo',
+        demoModalTitle: 'Generar reporte de ejemplo',
         demoModalDesc: 'Esto creará un reporte de pentesting completo de demostración con hallazgos reales, imágenes de evidencias y datos de ejemplo para que puedas explorar todas las funcionalidades de Pwnly.',
         demoModalWarning: 'El reporte de demo se añadirá a tus reportes existentes. No se eliminarán datos actuales.',
         demoModalWhat: 'Qué incluye el reporte demo:',
@@ -381,8 +380,8 @@ const UI = {
         myReports: 'My Reports',
         backToEditor: 'Back to Editor',
         createNewReport: 'Create New Report',
-        generateDemoDb: 'Generate Demo DB',
-        demoModalTitle: 'Generate Demo Database',
+        generateDemoDb: 'Sample report',
+        demoModalTitle: 'Generate sample report',
         demoModalDesc: 'This will create a complete demo pentesting report with real findings, evidence images and sample data so you can explore all Pwnly features.',
         demoModalWarning: 'The demo report will be added to your existing reports. No current data will be deleted.',
         demoModalWhat: 'What the demo report includes:',
@@ -3147,19 +3146,7 @@ function renderReportsPage() {
     if (!state.showReportSelector || state.showSplash) return '';
 
     const t = UI[state.lang];
-    const tImpExp = state.lang === 'es' ? {
-        exportDb: 'Exportar BD',
-        importDb: 'Importar BD',
-        importConfirm: '¿Estás seguro? Esto reemplazará todos los reportes actuales.',
-        importSuccess: 'Base de datos importada correctamente. Recargando...',
-        importError: 'Error al importar: '
-    } : {
-        exportDb: 'Export DB',
-        importDb: 'Import DB',
-        importConfirm: 'Are you sure? This will replace all current reports.',
-        importSuccess: 'Database imported successfully. Reloading...',
-        importError: 'Error importing: '
-    };
+    const bk = _bk();
 
     return `
         <div class="reports-page">
@@ -3174,23 +3161,23 @@ function renderReportsPage() {
                         </svg>
                         ${t.generateDemoDb}
                     </button>
-                    <button class="btn-secondary" onclick="openDbPasswordModal()">
+                    <button class="btn-secondary" onclick="openBackupExport()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
-                        ${tImpExp.exportDb}
+                        ${bk.exportBtn}
                     </button>
-                    <button class="btn-secondary" onclick="document.getElementById('db-import-input').click()">
+                    <button class="btn-secondary" onclick="document.getElementById('backup-import-input').click()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="17 8 12 3 7 8"/>
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
-                        ${tImpExp.importDb}
+                        ${bk.importBtn}
                     </button>
-                    <input type="file" id="db-import-input" accept=".db,.pdb" style="display:none" onchange="importDatabase(this)">
+                    <input type="file" id="backup-import-input" accept=".zip,.enc,application/zip" style="display:none" onchange="pickBackupFile(this)" aria-label="${bk.importBtn}">
                 </div>
             </div>
 
@@ -3880,7 +3867,7 @@ function renderApp() {
         ${renderCvssCalcModal()}
         ${renderDemoModal()}
         ${renderPdfModal()}
-        ${renderDbPasswordModal()}
+        ${renderBackupModal()}
         ${renderRevisionModal()}
         ${renderPasswordWarningModal()}
     `;
@@ -5083,15 +5070,20 @@ async function deleteReport(id) {
     }
 }
 
-// Magia que identifica un backup cifrado de Pwnly (8 bytes).
-const DB_ENC_MAGIC = 'PWNYDB01';
+// =========================================================================== //
+// COPIAS DE SEGURIDAD — ZIP (manifest + JSON + imágenes). La base de datos es
+// interna: no se exporta como fichero. Opcionalmente se cifra en el navegador
+// (PBKDF2 → AES-256-GCM) antes de descargarla.
+// =========================================================================== //
+const BK_ENC_MAGIC = 'PWNLYBK1';           // 8 bytes: copia cifrada
+const BK_MIN_PASSWORD = 8;
 
 // Deriva una clave AES-GCM de 256 bits a partir de la contraseña (PBKDF2-SHA256).
-async function deriveDbKey(password, salt) {
+async function deriveBackupKey(password, salt) {
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' },
+        { name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
         keyMaterial,
         { name: 'AES-GCM', length: 256 },
         false,
@@ -5111,185 +5103,287 @@ function _downloadBytes(bytes, filename, mime) {
     window.URL.revokeObjectURL(url);
 }
 
-// Exporta la base de datos. Si se pasa contraseña, la cifra (AES-256-GCM)
-// produciendo un fichero .pdb protegido; si no, exporta el .db en claro.
-async function exportDatabase(password) {
-    const isEs = state.lang === 'es';
-    const response = await fetch('/api/database/export');
-    if (!response.ok) throw new Error(isEs ? 'Error al exportar' : 'Export error');
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '').slice(0, 13);
-
-    if (!password) {
-        const blob = await response.blob();
-        const name = response.headers.get('content-disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'pwnly_backup.db';
-        _downloadBytes(new Uint8Array(await blob.arrayBuffer()), name, 'application/x-sqlite3');
-        return;
-    }
-
-    const buf = await response.arrayBuffer();
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveDbKey(password, salt);
-    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, buf));
-    const magic = new TextEncoder().encode(DB_ENC_MAGIC); // 8 bytes
-    const out = new Uint8Array(magic.length + salt.length + iv.length + ct.length);
-    out.set(magic, 0);
-    out.set(salt, magic.length);
-    out.set(iv, magic.length + salt.length);
-    out.set(ct, magic.length + salt.length + iv.length);
-    _downloadBytes(out, `pwnly_backup_${stamp}.pdb`, 'application/octet-stream');
-}
-
-async function importDatabase(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const isEs = state.lang === 'es';
-
-    const tImpExp = isEs ? {
-        importConfirm: '¿Estás seguro? Esto reemplazará todos los reportes actuales.',
-        importSuccess: 'Base de datos importada correctamente. Recargando...',
-        importError: 'Error al importar: ',
-        askPw: 'Esta base de datos está protegida. Introduce la contraseña:',
-        badPw: 'Contraseña incorrecta o archivo dañado.'
+function _bk() {
+    const es = state.lang === 'es';
+    return es ? {
+        title: 'Copia de seguridad', exportBtn: 'Exportar copia', importBtn: 'Importar copia',
+        exportTitle: 'Exportar copia de seguridad', importTitle: 'Importar copia de seguridad',
+        exportDesc: 'Se descarga un <b>.zip</b> portable con tus reportes y hallazgos (JSON), temas, plantillas, ajustes y las imágenes como ficheros independientes. <b>No incluye usuarios, contraseñas ni API keys.</b>',
+        pw: 'Contraseña (opcional)', pw2: 'Confirmar contraseña',
+        pwHint: 'Si la defines, el archivo se cifra (AES-256) y la necesitarás para importarlo. Si la pierdes, no se puede recuperar.',
+        pwShort: `La contraseña debe tener al menos ${BK_MIN_PASSWORD} caracteres.`, pwMismatch: 'Las contraseñas no coinciden.',
+        download: 'Descargar copia', downloadEnc: 'Descargar copia cifrada', working: 'Procesando…',
+        exported: 'Copia de seguridad descargada.', exportedEnc: 'Copia cifrada descargada.', exportError: 'Error al exportar: ',
+        cancel: 'Cancelar', close: 'Cerrar',
+        encrypted: 'Esta copia está cifrada. Introduce la contraseña para leerla.', decrypt: 'Descifrar y continuar', badPw: 'Contraseña incorrecta o archivo dañado.',
+        notBackup: 'Este archivo no es una copia de seguridad de Pwnly (.zip).',
+        legacyDb: 'Esto es una base de datos SQLite antigua. Ya no se admite: importa una copia .zip exportada desde Pwnly.',
+        file: 'Archivo', created: 'Creada', version: 'Versión de Pwnly', contents: 'Contenido',
+        reports: 'reportes', findings: 'hallazgos', themes: 'temas', templates: 'plantillas', images: 'imágenes',
+        excluded: 'No incluye usuarios, contraseñas ni API keys: tus cuentas actuales no cambian.',
+        warnings: 'Avisos', howTitle: 'Cómo importar',
+        merge: 'Añadir a lo existente', mergeDesc: 'Recomendado. Los reportes se añaden como copias nuevas; temas y plantillas con el mismo identificador se omiten. No se borra nada.',
+        replace: 'Reemplazar todo el contenido', replaceDesc: 'Elimina los reportes, temas y plantillas actuales y restaura los de la copia, incluidos los ajustes.',
+        replaceConfirm: 'Entiendo que se borrarán los reportes, temas y plantillas actuales.',
+        importNow: 'Importar', importing: 'Importando…', importError: 'Error al importar: ',
+        doneTitle: 'Importación completada', imported: 'Importado', skipped: 'Omitidos por duplicado', reload: 'Recargar la aplicación',
+        validating: 'Validando la copia…', step: 'Paso'
     } : {
-        importConfirm: 'Are you sure? This will replace all current reports.',
-        importSuccess: 'Database imported successfully. Reloading...',
-        importError: 'Error importing: ',
-        askPw: 'This database is password-protected. Enter the password:',
-        badPw: 'Wrong password or corrupted file.'
+        title: 'Backup', exportBtn: 'Export backup', importBtn: 'Import backup',
+        exportTitle: 'Export backup', importTitle: 'Import backup',
+        exportDesc: 'Downloads a portable <b>.zip</b> with your reports and findings (JSON), themes, templates, settings and images as separate files. <b>It does not include users, passwords or API keys.</b>',
+        pw: 'Password (optional)', pw2: 'Confirm password',
+        pwHint: 'If set, the file is encrypted (AES-256) and you will need the password to import it. If you lose it, it cannot be recovered.',
+        pwShort: `Password must be at least ${BK_MIN_PASSWORD} characters.`, pwMismatch: 'Passwords do not match.',
+        download: 'Download backup', downloadEnc: 'Download encrypted backup', working: 'Working…',
+        exported: 'Backup downloaded.', exportedEnc: 'Encrypted backup downloaded.', exportError: 'Export error: ',
+        cancel: 'Cancel', close: 'Close',
+        encrypted: 'This backup is encrypted. Enter the password to read it.', decrypt: 'Decrypt and continue', badPw: 'Wrong password or corrupted file.',
+        notBackup: 'This file is not a Pwnly backup (.zip).',
+        legacyDb: 'This is an old SQLite database. It is no longer supported: import a .zip backup exported from Pwnly.',
+        file: 'File', created: 'Created', version: 'Pwnly version', contents: 'Contents',
+        reports: 'reports', findings: 'findings', themes: 'themes', templates: 'templates', images: 'images',
+        excluded: 'Users, passwords and API keys are not included: your current accounts stay as they are.',
+        warnings: 'Warnings', howTitle: 'How to import',
+        merge: 'Add to existing', mergeDesc: 'Recommended. Reports are added as new copies; themes and templates with the same identifier are skipped. Nothing is deleted.',
+        replace: 'Replace all content', replaceDesc: 'Deletes current reports, themes and templates and restores those in the backup, including settings.',
+        replaceConfirm: 'I understand current reports, themes and templates will be deleted.',
+        importNow: 'Import', importing: 'Importing…', importError: 'Import error: ',
+        doneTitle: 'Import complete', imported: 'Imported', skipped: 'Skipped (duplicates)', reload: 'Reload the app',
+        validating: 'Validating the backup…', step: 'Step'
     };
-
-    try {
-        let bytes = new Uint8Array(await file.arrayBuffer());
-        const magic = new TextDecoder().decode(bytes.slice(0, 8));
-
-        if (magic === DB_ENC_MAGIC) {
-            const pw = prompt(tImpExp.askPw);
-            if (pw === null) { input.value = ''; return; }
-            try {
-                const salt = bytes.slice(8, 24);
-                const iv = bytes.slice(24, 36);
-                const ct = bytes.slice(36);
-                const key = await deriveDbKey(pw, salt);
-                const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-                bytes = new Uint8Array(dec);
-            } catch (e) {
-                alert(tImpExp.badPw);
-                input.value = '';
-                return;
-            }
-        }
-
-        if (!confirm(tImpExp.importConfirm)) { input.value = ''; return; }
-
-        const formData = new FormData();
-        formData.append('file', new Blob([bytes], { type: 'application/x-sqlite3' }), 'imported.db');
-        const response = await fetch('/api/database/import', { method: 'POST', body: formData });
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.detail || 'Error');
-        }
-        alert(tImpExp.importSuccess);
-        window.location.reload();
-    } catch (err) {
-        alert(tImpExp.importError + err.message);
-    }
-    input.value = '';
 }
 
-// ---- Modal: proteger la base de datos exportada con contraseña ---- //
-function openDbPasswordModal() {
-    state.dbPasswordModal = { open: true, busy: false };
+const _bkInit = () => ({ open: false, kind: '', busy: false, error: '', fileName: '', bytes: null,
+    needsPassword: false, preview: null, mode: 'merge', confirmReplace: false, result: null });
+state.backupModal = _bkInit();
+
+function closeBackupModal() { state.backupModal = _bkInit(); renderApp(); }
+
+function openBackupExport() {
+    state.backupModal = { ..._bkInit(), open: true, kind: 'export' };
     renderApp();
+    setTimeout(() => { const el = document.getElementById('bkPw'); if (el) el.focus(); }, 30);
 }
 
-function closeDbPasswordModal() {
-    state.dbPasswordModal = { open: false, busy: false };
-    renderApp();
-}
-
-// Exporta la BD completa SIN contraseña (en claro) desde el modal.
-async function exportDbPlain() {
-    const isEs = state.lang === 'es';
-    try {
-        state.dbPasswordModal.busy = true; renderApp();
-        await exportDatabase();
-        closeDbPasswordModal();
-    } catch (err) {
-        state.dbPasswordModal.busy = false; renderApp();
-        alert((isEs ? 'Error al exportar: ' : 'Error exporting: ') + err.message);
-    }
-}
-
-async function submitDbPassword(event) {
+async function submitBackupExport(event) {
     if (event) event.preventDefault();
-    const isEs = state.lang === 'es';
-    const pw = (document.getElementById('dbPw') || {}).value || '';
-    const pw2 = (document.getElementById('dbPw2') || {}).value || '';
-    const errEl = document.getElementById('dbPwError');
-    const setErr = (m) => { if (errEl) { errEl.textContent = m; errEl.style.display = m ? 'block' : 'none'; } };
-
-    if (pw.length < 4) { setErr(isEs ? 'La contraseña debe tener al menos 4 caracteres.' : 'Password must be at least 4 characters.'); return; }
-    if (pw !== pw2) { setErr(isEs ? 'Las contraseñas no coinciden.' : 'Passwords do not match.'); return; }
-    setErr('');
-
+    const b = _bk();
+    const pw = (document.getElementById('bkPw') || {}).value || '';
+    const pw2 = (document.getElementById('bkPw2') || {}).value || '';
+    if (pw && pw.length < BK_MIN_PASSWORD) { state.backupModal.error = b.pwShort; renderApp(); return; }
+    if (pw !== pw2) { state.backupModal.error = b.pwMismatch; renderApp(); return; }
+    state.backupModal.busy = true; state.backupModal.error = ''; renderApp();
     try {
-        state.dbPasswordModal.busy = true; renderApp();
-        await exportDatabase(pw);
-        closeDbPasswordModal();
-        alert(isEs ? 'Base de datos exportada y cifrada correctamente.' : 'Database exported and encrypted successfully.');
+        const response = await fetch('/api/backup/export');
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'HTTP ' + response.status);
+        const cd = response.headers.get('content-disposition') || '';
+        const name = (cd.match(/filename="?([^";]+)"?/) || [])[1] || 'pwnly-backup.zip';
+        const zipBytes = new Uint8Array(await response.arrayBuffer());
+        if (!pw) {
+            _downloadBytes(zipBytes, name, 'application/zip');
+        } else {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await deriveBackupKey(pw, salt);
+            const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, zipBytes));
+            const magic = new TextEncoder().encode(BK_ENC_MAGIC);
+            const out = new Uint8Array(magic.length + salt.length + iv.length + ct.length);
+            out.set(magic, 0); out.set(salt, magic.length); out.set(iv, magic.length + salt.length); out.set(ct, magic.length + salt.length + iv.length);
+            _downloadBytes(out, name + '.enc', 'application/octet-stream');
+        }
+        state.backupModal = _bkInit(); renderApp();
+        showToast(pw ? b.exportedEnc : b.exported);
     } catch (err) {
-        state.dbPasswordModal.busy = false; renderApp();
-        alert((isEs ? 'Error al exportar: ' : 'Error exporting: ') + err.message);
+        state.backupModal.busy = false; state.backupModal.error = b.exportError + err.message; renderApp();
     }
 }
 
-function renderDbPasswordModal() {
-    const m = state.dbPasswordModal;
+// Selección de archivo → detecta formato (zip / cifrada / SQLite antigua) → vista previa.
+async function pickBackupFile(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    const b = _bk();
+    state.backupModal = { ..._bkInit(), open: true, kind: 'import', fileName: file.name, busy: true };
+    renderApp();
+    try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const head = new TextDecoder().decode(bytes.slice(0, 16));
+        if (head.startsWith(BK_ENC_MAGIC)) {
+            state.backupModal.bytes = bytes; state.backupModal.needsPassword = true; state.backupModal.busy = false;
+            renderApp();
+            setTimeout(() => { const el = document.getElementById('bkImpPw'); if (el) el.focus(); }, 30);
+            return;
+        }
+        if (head.startsWith('SQLite format 3') || head.startsWith('PWNYDB01')) {
+            state.backupModal.busy = false; state.backupModal.error = b.legacyDb; renderApp(); return;
+        }
+        if (!(bytes[0] === 0x50 && bytes[1] === 0x4b)) {        // "PK" = ZIP
+            state.backupModal.busy = false; state.backupModal.error = b.notBackup; renderApp(); return;
+        }
+        state.backupModal.bytes = bytes;
+        await previewBackup();
+    } catch (err) {
+        state.backupModal.busy = false; state.backupModal.error = b.importError + err.message; renderApp();
+    }
+}
+
+async function decryptBackupFile(event) {
+    if (event) event.preventDefault();
+    const b = _bk();
+    const pw = (document.getElementById('bkImpPw') || {}).value || '';
+    if (!pw) return;
+    state.backupModal.busy = true; state.backupModal.error = ''; renderApp();
+    try {
+        const bytes = state.backupModal.bytes;
+        const salt = bytes.slice(8, 24), iv = bytes.slice(24, 36), ct = bytes.slice(36);
+        const key = await deriveBackupKey(pw, salt);
+        const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+        state.backupModal.bytes = new Uint8Array(dec);
+        state.backupModal.needsPassword = false;
+        await previewBackup();
+    } catch (e) {
+        state.backupModal.busy = false; state.backupModal.error = b.badPw; renderApp();
+    }
+}
+
+async function _postBackup(dryRun) {
+    const m = state.backupModal;
+    const fd = new FormData();
+    fd.append('file', new Blob([m.bytes], { type: 'application/zip' }), 'backup.zip');
+    fd.append('mode', m.mode);
+    fd.append('dry_run', dryRun ? 'true' : 'false');
+    const response = await fetch('/api/backup/import', { method: 'POST', body: fd });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'HTTP ' + response.status);
+    return data;
+}
+
+async function previewBackup() {
+    const b = _bk();
+    state.backupModal.busy = true; state.backupModal.error = ''; renderApp();
+    try {
+        state.backupModal.preview = await _postBackup(true);
+        state.backupModal.busy = false; renderApp();
+    } catch (err) {
+        state.backupModal.busy = false; state.backupModal.error = err.message; renderApp();
+    }
+}
+
+function setBackupMode(mode) { state.backupModal.mode = mode; state.backupModal.confirmReplace = false; renderApp(); }
+function setBackupConfirm(v) { state.backupModal.confirmReplace = !!v; renderApp(); }
+
+async function confirmBackupImport() {
+    const m = state.backupModal;
+    const b = _bk();
+    if (m.mode === 'replace' && !m.confirmReplace) return;
+    m.busy = true; m.error = ''; renderApp();
+    try {
+        state.backupModal.result = await _postBackup(false);
+        state.backupModal.busy = false; renderApp();
+    } catch (err) {
+        state.backupModal.busy = false; state.backupModal.error = b.importError + err.message; renderApp();
+    }
+}
+
+function renderBackupModal() {
+    const m = state.backupModal;
     if (!m || !m.open) return '';
-    const isEs = state.lang === 'es';
+    const b = _bk();
+    const x = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const title = m.result ? b.doneTitle : (m.kind === 'export' ? b.exportTitle : b.importTitle);
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+    const countLine = (c) => [['reports', 'reports'], ['findings', 'findings'], ['themes', 'themes'], ['finding_templates', 'templates'], ['assets', 'images']]
+        .map(([k, lk]) => `${cap(b[lk])}: ${c[k]}`).join(' · ');
+    const err = m.error ? `<div class="login-error" role="alert" style="margin-top:0.8rem;">${escapeHTML(m.error)}</div>` : '';
+    let body = '';
+
+    if (m.kind === 'export') {
+        body = `
+            <p class="bk-text">${b.exportDesc}</p>
+            <form onsubmit="submitBackupExport(event)" autocomplete="off">
+                <label class="login-label" for="bkPw">${b.pw}</label>
+                <input type="password" id="bkPw" class="login-input" autocomplete="new-password" aria-describedby="bkPwHint">
+                <label class="login-label" for="bkPw2" style="margin-top:0.6rem;">${b.pw2}</label>
+                <input type="password" id="bkPw2" class="login-input" autocomplete="new-password">
+                <p class="bk-hint" id="bkPwHint">${b.pwHint}</p>
+                ${err}
+                <div class="bk-actions">
+                    <button type="button" class="btn-secondary" onclick="closeBackupModal()">${b.cancel}</button>
+                    <button type="submit" class="btn-primary" ${m.busy ? 'disabled' : ''}>${m.busy ? b.working : b.download}</button>
+                </div>
+            </form>`;
+    } else if (m.result) {
+        const r = m.result;
+        body = `
+            <div class="bk-done" role="status">
+                <p class="bk-text"><b>${b.imported}:</b> ${countLine(r.imported)}</p>
+                ${(r.skipped.themes || r.skipped.finding_templates) ? `<p class="bk-text"><b>${b.skipped}:</b> ${r.skipped.themes} ${b.themes}, ${r.skipped.finding_templates} ${b.templates}</p>` : ''}
+                ${r.warnings.length ? `<p class="bk-hint">${r.warnings.map(escapeHTML).join('<br>')}</p>` : ''}
+            </div>
+            <div class="bk-actions"><button type="button" class="btn-primary" onclick="window.location.reload()">${b.reload}</button></div>`;
+    } else if (m.needsPassword) {
+        body = `
+            <p class="bk-text">${b.encrypted}</p>
+            <form onsubmit="decryptBackupFile(event)">
+                <label class="login-label" for="bkImpPw">${b.pw.replace(' (opcional)', '').replace(' (optional)', '')}</label>
+                <input type="password" id="bkImpPw" class="login-input" autocomplete="current-password">
+                ${err}
+                <div class="bk-actions">
+                    <button type="button" class="btn-secondary" onclick="closeBackupModal()">${b.cancel}</button>
+                    <button type="submit" class="btn-primary" ${m.busy ? 'disabled' : ''}>${m.busy ? b.working : b.decrypt}</button>
+                </div>
+            </form>`;
+    } else if (m.preview) {
+        const p = m.preview;
+        const created = p.created_at ? new Date(p.created_at).toLocaleString(state.lang === 'es' ? 'es-ES' : 'en-GB') : '—';
+        const canImport = !m.busy && (m.mode !== 'replace' || m.confirmReplace);
+        body = `
+            <dl class="bk-meta">
+                <div><dt>${b.file}</dt><dd>${escapeHTML(m.fileName)}</dd></div>
+                <div><dt>${b.created}</dt><dd>${escapeHTML(created)}</dd></div>
+                <div><dt>${b.version}</dt><dd>${escapeHTML(p.app_version || '—')}</dd></div>
+                <div><dt>${b.contents}</dt><dd>${countLine(p.counts)}</dd></div>
+            </dl>
+            ${p.reports && p.reports.length ? `<ul class="bk-list">${p.reports.slice(0, 5).map(r => `<li>${escapeHTML(r.title)} <span>· ${escapeHTML(r.client)} · ${r.findings} ${b.findings}</span></li>`).join('')}${p.reports.length > 5 ? `<li><span>… +${p.counts.reports - 5}</span></li>` : ''}</ul>` : ''}
+            <p class="bk-hint">${b.excluded}</p>
+            ${p.warnings && p.warnings.length ? `<div class="bk-warn" role="status"><b>${b.warnings}</b><br>${p.warnings.map(escapeHTML).join('<br>')}</div>` : ''}
+            <fieldset class="bk-modes">
+                <legend>${b.howTitle}</legend>
+                <label class="bk-mode ${m.mode === 'merge' ? 'on' : ''}"><input type="radio" name="bkMode" value="merge" ${m.mode === 'merge' ? 'checked' : ''} onchange="setBackupMode('merge')"><span><b>${b.merge}</b><small>${b.mergeDesc}</small></span></label>
+                <label class="bk-mode bk-mode--danger ${m.mode === 'replace' ? 'on' : ''}"><input type="radio" name="bkMode" value="replace" ${m.mode === 'replace' ? 'checked' : ''} onchange="setBackupMode('replace')"><span><b>${b.replace}</b><small>${b.replaceDesc}</small></span></label>
+            </fieldset>
+            ${m.mode === 'replace' ? `<label class="bk-confirm"><input type="checkbox" ${m.confirmReplace ? 'checked' : ''} onchange="setBackupConfirm(this.checked)"> ${b.replaceConfirm}</label>` : ''}
+            ${err}
+            <div class="bk-actions">
+                <button type="button" class="btn-secondary" onclick="closeBackupModal()">${b.cancel}</button>
+                <button type="button" class="btn-primary ${m.mode === 'replace' ? 'bk-danger' : ''}" onclick="confirmBackupImport()" ${canImport ? '' : 'disabled'}>${m.busy ? b.importing : b.importNow}</button>
+            </div>`;
+    } else {
+        body = (m.busy ? `<p class="bk-text" role="status">${b.validating}</p>` : '') + err +
+            `<div class="bk-actions"><button type="button" class="btn-secondary" onclick="closeBackupModal()">${b.close}</button></div>`;
+    }
+
     return `
-        <div class="settings-overlay" style="align-items:center;justify-content:center;padding:1rem;" onclick="closeDbPasswordModal()">
-            <div class="settings-modal" style="width:100%;max-width:460px;" onclick="event.stopPropagation()">
+        <div class="settings-overlay bk-overlay" onclick="closeBackupModal()">
+            <div class="settings-modal bk-modal" role="dialog" aria-modal="true" aria-labelledby="bkTitle" onclick="event.stopPropagation()">
                 <div class="settings-modal-header">
-                    <span style="display:inline-flex;align-items:center;gap:0.5rem;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        ${isEs ? 'Exportar base de datos' : 'Export database'}
+                    <span id="bkTitle" style="display:inline-flex;align-items:center;gap:0.5rem;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        ${title}
                     </span>
-                    <button class="settings-close-btn" onclick="closeDbPasswordModal()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                    <button class="settings-close-btn" onclick="closeBackupModal()" aria-label="${b.close}">${x}</button>
                 </div>
-                <div class="settings-section">
-                    <p style="font-size:0.85rem;color:var(--gray-500,#6b7280);line-height:1.55;margin:0 0 1rem;">
-                        ${isEs
-                            ? 'Se exportará <b>toda</b> la base de datos: todos los reportes, ajustes, temas y usuarios. Puedes protegerla con una contraseña (cifrado AES-256) o exportarla sin cifrar.'
-                            : 'The <b>whole</b> database will be exported: all reports, settings, themes and users. You can protect it with a password (AES-256) or export it unencrypted.'}
-                    </p>
-                    <form onsubmit="submitDbPassword(event)">
-                        <label class="login-label">${isEs ? 'Contraseña (opcional)' : 'Password (optional)'}</label>
-                        <input type="password" id="dbPw" class="login-input" autocomplete="new-password" placeholder="${isEs ? 'Déjala en blanco para no cifrar' : 'Leave blank to skip encryption'}" autofocus>
-                        <label class="login-label" style="margin-top:0.6rem;">${isEs ? 'Confirmar contraseña' : 'Confirm password'}</label>
-                        <input type="password" id="dbPw2" class="login-input" autocomplete="new-password">
-                        <p style="font-size:0.78rem;color:var(--gray-500,#6b7280);line-height:1.5;margin:0.7rem 0 0;">
-                            ${isEs
-                                ? 'Si estableces contraseña, la necesitarás para volver a importar el fichero. <b>Si la pierdes, no podrás recuperar los datos.</b>'
-                                : 'If you set a password, you will need it to import the file again. <b>If you lose it, the data cannot be recovered.</b>'}
-                        </p>
-                        <div id="dbPwError" class="login-error" style="display:none;margin-top:0.6rem;"></div>
-                        <div style="display:flex;gap:0.6rem;margin-top:1.1rem;">
-                            <button type="button" class="btn-secondary" style="flex:1;" onclick="exportDbPlain()" ${m.busy ? 'disabled' : ''}>
-                                ${isEs ? 'Exportar sin cifrar' : 'Export unencrypted'}
-                            </button>
-                            <button type="submit" class="login-btn" style="flex:1;margin:0;" ${m.busy ? 'disabled' : ''}>
-                                ${m.busy ? (isEs ? 'Exportando…' : 'Exporting…') : (isEs ? 'Exportar protegida' : 'Export protected')}
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                <div class="settings-section">${body}</div>
             </div>
         </div>`;
 }
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.backupModal && state.backupModal.open && !state.backupModal.busy) closeBackupModal();
+});
+
 
 async function saveCurrentReport(silent = false) {
     try {
