@@ -8,7 +8,7 @@ const state = {
     activeTab: 'editor',
     isLoading: false,
     currentReportId: null,
-    reportTheme: '',
+    reportTheme: 'default',
     savedReports: [],
     showReportSelector: false,
     showThemesPage: false,
@@ -90,7 +90,7 @@ const state = {
     showDemoModal: false,
     showPdfModal: false,
     showRevisionModal: false,
-    pdfPrintTheme: '',
+    pdfPrintTheme: 'default',
     pdfShowSeverityBars: true,
     pdfContentWidth: 820,
     // Autenticación
@@ -988,6 +988,235 @@ function renderNavbar() {
     `;
 }
 
+
+// =========================================================================== //
+// EDITOR: navegación, accesibilidad y eficiencia
+// =========================================================================== //
+const _isMobileEditor = () => window.matchMedia && window.matchMedia('(max-width: 760px)').matches;
+state.editorOpen = state.editorOpen || {};
+
+// Estado abierto/cerrado de las secciones colapsables. En móvil las tarjetas de
+// metadatos arrancan cerradas (menos scroll); el usuario las abre y se recuerda.
+function editorSectionOpen(key, def) {
+    if (key in state.editorOpen) return state.editorOpen[key];
+    if (def !== undefined) return def;
+    return !_isMobileEditor();
+}
+function editorToggled(key, open) { state.editorOpen[key] = !!open; }
+
+function findingGroup(key, inner) {
+    const isEs = state.lang === 'es';
+    const labels = {
+        evidence: isEs ? 'Reproducción y evidencia' : 'Reproduction & evidence',
+        impact:   isEs ? 'Impacto y remediación'    : 'Impact & remediation',
+        refs:     isEs ? 'Referencias e identificadores' : 'References & identifiers'
+    };
+    const def = key !== 'refs';
+    return `<details class="fgroup" id="ed-fg-${key}" ${editorSectionOpen('fg-' + key, def) ? 'open' : ''} ontoggle="editorToggled('fg-${key}', this.open)">
+        <summary>${labels[key]}</summary>
+        <div class="details-body">${inner}</div>
+    </details>`;
+}
+
+function renderEditorBar() {
+    const isEs = state.lang === 'es';
+    const n = state.findings.length;
+    const chips = [
+        ['ed-general',   isEs ? 'Información' : 'General'],
+        ['ed-summary',   isEs ? 'Resumen' : 'Summary'],
+        ['ed-scope',     isEs ? 'Alcance' : 'Scope'],
+        ['ed-revisions', isEs ? 'Revisiones' : 'Revisions'],
+        ['ed-findings',  (isEs ? 'Hallazgos' : 'Findings') + ` (${n})`],
+    ];
+    const saveLabel = (UI[state.lang] || {}).saveReport || (isEs ? 'Guardar' : 'Save');
+    const saveIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+    const plus = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    return `
+        <div class="editor-bar" role="toolbar" aria-label="${isEs ? 'Herramientas del editor' : 'Editor tools'}">
+            <nav class="editor-bar-nav" aria-label="${isEs ? 'Secciones del editor' : 'Editor sections'}">
+                ${chips.map(([id, label]) => `<a class="editor-chip" href="#${id}" data-target="${id}" onclick="editorGoto(event,'${id}')">${label}</a>`).join('')}
+                <a class="editor-chip editor-chip--accent" href="#ed-form" data-target="ed-form" onclick="editorNewFinding(event)">${plus}<span>${isEs ? 'Nuevo hallazgo' : 'New finding'}</span></a>
+            </nav>
+            <div class="editor-bar-actions">
+                <span class="editor-status ${state.isDirty ? 'is-dirty' : ''}" role="status" aria-live="polite">${state.isDirty ? (isEs ? 'Cambios sin guardar' : 'Unsaved changes') : (isEs ? 'Guardado' : 'Saved')}</span>
+                <button type="button" class="btn-primary editor-save" onclick="saveCurrentReport()" aria-keyshortcuts="Control+S Meta+S" title="${isEs ? 'Guardar reporte (Ctrl+S)' : 'Save report (Ctrl+S)'}">${saveIcon}<span>${saveLabel}</span></button>
+            </div>
+        </div>
+        <div class="editor-fab-bar" role="toolbar" aria-label="${isEs ? 'Acciones rápidas' : 'Quick actions'}">
+            <button type="button" class="btn-secondary" onclick="editorNewFinding(event)">${plus}<span>${isEs ? 'Hallazgo' : 'Finding'}</span></button>
+            <button type="button" class="btn-primary editor-save" onclick="saveCurrentReport()">${saveIcon}<span>${saveLabel}</span></button>
+        </div>`;
+}
+
+function editorGoto(e, id) {
+    if (e) e.preventDefault();
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName === 'DETAILS' && !el.open) { el.open = true; }
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    const target = el.querySelector('summary, h2, h3, input, textarea, select, button');
+    if (target) setTimeout(() => { try { target.focus({ preventScroll: true }); } catch (_) {} }, reduce ? 0 : 350);
+}
+
+function focusFindingForm() {
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const form = document.getElementById('ed-form');
+    if (form) form.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    const title = document.getElementById('findingTitle');
+    if (title) setTimeout(() => { try { title.focus({ preventScroll: true }); } catch (_) {} }, reduce ? 0 : 300);
+}
+
+function editorNewFinding(e) {
+    if (e) e.preventDefault();
+    if (state.editingFindingIndex !== null) { resetFindingForm(); }
+    focusFindingForm();
+}
+
+function switchKey(e) {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.currentTarget.click(); }
+}
+
+// Plantillas: combobox con teclado (↓ abre y entra en la lista, Enter aplica, Esc cierra).
+function templateSearchKey(e) {
+    const select = document.getElementById('templateSelect');
+    if (!select) return;
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (select.style.display === 'none') showTemplateDropdownKeep();
+        const opt = Array.from(select.options).find(o => o.style.display !== 'none' && !o.hidden);
+        if (opt) { select._kb = true; select.value = opt.value; }
+        select.focus();
+    } else if (e.key === 'Escape') {
+        hideTemplateDropdown();
+        e.currentTarget.setAttribute('aria-expanded', 'false');
+    }
+}
+function showTemplateDropdownKeep() {
+    const select = document.getElementById('templateSelect');
+    const input = document.getElementById('templateSearch');
+    if (select) select.style.display = 'block';
+    if (input) input.setAttribute('aria-expanded', 'true');
+}
+function templateListKey(e) {
+    const select = e.currentTarget;
+    if (['ArrowDown', 'ArrowUp', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+        select._kb = true;
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        select._kb = false;
+        if (select.value) { applyTemplate(select.value); hideTemplateDropdown(); }
+    } else if (e.key === 'Escape') {
+        hideTemplateDropdown();
+        const input = document.getElementById('templateSearch');
+        if (input) input.focus();
+    }
+}
+
+// Indicador "Sin guardar / Guardado" siempre sincronizado con state.isDirty.
+function refreshEditorStatus() {
+    const isEs = state.lang === 'es';
+    document.querySelectorAll('.editor-status').forEach(el => {
+        el.classList.toggle('is-dirty', !!state.isDirty);
+        el.textContent = state.isDirty ? (isEs ? 'Cambios sin guardar' : 'Unsaved changes') : (isEs ? 'Guardado' : 'Saved');
+    });
+}
+(function () {
+    let v = !!state.isDirty;
+    Object.defineProperty(state, 'isDirty', {
+        get() { return v; },
+        set(x) { const nv = !!x; if (nv !== v) { v = nv; refreshEditorStatus(); } },
+        enumerable: true, configurable: true
+    });
+})();
+
+let _edUid = 0;
+let _edSpyRaf = 0;
+function postRenderEditor() {
+    const nav = document.querySelector('.navbar');
+    if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+    const page = document.querySelector('.editor-page');
+    if (!page) return;
+    // 1) Etiquetas asociadas a su control (lectores de pantalla + clic en la etiqueta).
+    page.querySelectorAll('.form-group').forEach(g => {
+        const ctl = g.querySelector('input:not([type=hidden]):not([type=file]):not([type=radio]):not([type=checkbox]), select, textarea');
+        if (!ctl) return;
+        if (!ctl.id) ctl.id = 'ed-f-' + (++_edUid);
+        const lab = g.querySelector('label');
+        if (lab && !lab.hasAttribute('for') && !lab.querySelector('input,select,textarea')) lab.setAttribute('for', ctl.id);
+        const small = g.querySelector('small.text-muted, small');
+        if (small && !small.id) small.id = ctl.id + '-hint';
+        if (small && !ctl.hasAttribute('aria-describedby') && small.textContent.trim() && !ctl.closest('.template-search-container')) ctl.setAttribute('aria-describedby', small.id);
+    });
+    // 2) Controles sin etiqueta visible: usar placeholder / título.
+    page.querySelectorAll('input, textarea, select').forEach(c => {
+        if (c.type === 'hidden') return;
+        const labelled = c.getAttribute('aria-label') || c.getAttribute('aria-labelledby') || (c.id && page.querySelector('label[for="' + c.id + '"]')) || c.closest('label');
+        if (!labelled) {
+            const txt = c.getAttribute('placeholder') || c.getAttribute('title');
+            if (txt) c.setAttribute('aria-label', txt);
+        }
+    });
+    page.querySelectorAll('input[type=file]').forEach(c => {
+        if (!c.getAttribute('aria-label')) c.setAttribute('aria-label', (c.closest('.form-group')?.querySelector('label')?.textContent || 'Archivo').trim());
+    });
+    // 3) Tarjetas como regiones con nombre.
+    page.querySelectorAll('.editor-meta-card').forEach(card => {
+        const h = card.querySelector('h3');
+        if (!h) return;
+        if (!h.id) h.id = card.id + '-title';
+        card.setAttribute('role', 'region');
+        card.setAttribute('aria-labelledby', h.id);
+    });
+    const fc = page.querySelector('.findings-card');
+    const fh = fc && fc.querySelector('.findings-section-title');
+    if (fc && fh) { fh.id = fh.id || 'ed-findings-title'; fc.setAttribute('role', 'region'); fc.setAttribute('aria-labelledby', fh.id); }
+    const form = document.getElementById('findingForm');
+    if (form && !form.getAttribute('aria-label')) form.setAttribute('aria-label', state.lang === 'es' ? 'Formulario de hallazgo' : 'Finding form');
+    refreshEditorStatus();
+    editorScrollSpy();
+}
+
+// Resalta en la barra la sección visible (aria-current).
+function editorScrollSpy() {
+    if (_edSpyRaf) return;
+    _edSpyRaf = requestAnimationFrame(() => {
+        _edSpyRaf = 0;
+        const chips = document.querySelectorAll('.editor-chip[data-target]:not(.editor-chip--accent)');
+        if (!chips.length) return;
+        const bar = document.querySelector('.editor-bar');
+        const offset = (bar ? bar.getBoundingClientRect().bottom : 120) + 24;
+        let current = null;
+        chips.forEach(ch => {
+            const el = document.getElementById(ch.dataset.target);
+            if (el && el.getBoundingClientRect().top <= offset) current = ch;
+        });
+        if (!current) current = chips[0];
+        chips.forEach(ch => {
+            const on = ch === current;
+            if (on) { ch.setAttribute('aria-current', 'true'); } else { ch.removeAttribute('aria-current'); }
+        });
+        // En móvil la barra se desliza: mantener visible el chip activo.
+        if (current && current.scrollIntoView && _isMobileEditor()) {
+            const nav = current.parentElement;
+            if (nav) nav.scrollTo({ left: current.offsetLeft - 12, behavior: 'auto' });
+        }
+    });
+}
+window.addEventListener('scroll', editorScrollSpy, { passive: true });
+window.addEventListener('resize', () => { postRenderEditor(); });
+
+// Atajos: Ctrl/Cmd+S guarda; Ctrl/Cmd+Enter registra el hallazgo desde el formulario.
+document.addEventListener('keydown', (e) => {
+    if (state.activeTab !== 'editor' || !state.isAuthenticated || !document.querySelector('.editor-page')) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveCurrentReport(); return; }
+    if (mod && e.key === 'Enter') {
+        const form = document.getElementById('findingForm');
+        if (form && form.contains(document.activeElement)) { e.preventDefault(); form.requestSubmit(); }
+    }
+});
+
 function renderEditor() {
     if (state.activeTab !== 'editor' || state.showSplash || state.showReportSelector || state.showThemesPage) return '';
     if (state.showReportSelector) return '';
@@ -996,6 +1225,7 @@ function renderEditor() {
 
     return `
         <div class="editor-page">
+        ${renderEditorBar()}
         <div class="editor-meta-grid">
             ${renderGeneralInfoCard()}
             ${renderExecutiveSummaryCard()}
@@ -1003,9 +1233,9 @@ function renderEditor() {
             ${renderRevisionHistorySection()}
         </div>
         <div class="editor-work-grid">
-            <div class="editor-work-form">
+            <div class="editor-work-form" id="ed-form">
                 <div class="card">
-                    <h2>${t.newFinding}</h2>
+                    <h2>${state.editingFindingIndex !== null ? (state.lang === 'es' ? 'Editando hallazgo #' : 'Editing finding #') + (state.editingFindingIndex + 1) : t.newFinding}</h2>
                     <p class="text-muted">${t.newFindingDesc}</p>
                     
                     <form id="findingForm" onsubmit="handleFindingSubmit(event)">
@@ -1014,11 +1244,13 @@ function renderEditor() {
                             <input type="text"
                                    id="templateSearch"
                                    class="template-search-input"
+                                   role="combobox" aria-expanded="false" aria-controls="templateSelect" aria-autocomplete="list"
+                                   onkeydown="templateSearchKey(event)"
                                    placeholder="${state.lang === 'es' ? 'Buscar plantilla...' : 'Search template...'}"
                                    oninput="filterTemplates(this.value)"
                                    onfocus="showTemplateDropdown()"
                                    autocomplete="off">
-                            <select id="templateSelect" onchange="applyTemplate(this.value); hideTemplateDropdown();" size="8" class="template-filtered-select" style="display:none;">
+                            <select id="templateSelect" aria-label="${t.quickTemplate}" onpointerdown="this._kb=false" onkeydown="templateListKey(event)" onchange="if(this._kb){return;} applyTemplate(this.value); hideTemplateDropdown();" size="8" class="template-filtered-select" style="display:none;">
                                 <option value="custom" ${state.currentFinding.templateKey === 'custom' ? 'selected' : ''}>${t.customOther}</option>
                                 <option value="sqli" ${state.currentFinding.templateKey === 'sqli' ? 'selected' : ''}>SQL Injection</option>
                                 <option value="xss" ${state.currentFinding.templateKey === 'xss' ? 'selected' : ''}>XSS</option>
@@ -1060,18 +1292,14 @@ function renderEditor() {
                             <input type="text" id="findingTitle" value="${escapeHTML(state.currentFinding.title)}" required oninput="updateCurrentFinding('title', this.value)">
                         </div>
                         
-                        <div class="form-group">
+                        <div class="form-row form-row--sev-cvss">
+<div class="form-group">
                             <label>${t.severity}</label>
                             <select id="findingSeverity" onchange="updateCurrentFinding('severity', this.value)">
                                 ${Object.entries(t.severityLevels).map(([key, label]) =>
         `<option value="${key}" ${state.currentFinding.severity === key ? 'selected' : ''}>${label}</option>`
     ).join('')}
                             </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>${t.description}</label>
-                            <textarea id="findingDescription" rows="4" oninput="updateCurrentFinding('description', this.value)">${escapeHTML(state.currentFinding.description)}</textarea>
                         </div>
                         
                         <div class="form-group">
@@ -1086,7 +1314,13 @@ function renderEditor() {
                             ${state.currentFinding.cvssVector ? `<small class="text-muted" style="font-family:ui-monospace,monospace;display:block;margin-top:0.35rem;word-break:break-all;">${escapeHTML(state.currentFinding.cvssVector)}</small>` : ''}
                         </div>
 
-                        <div class="form-group">
+                        </div>
+<div class="form-group">
+                            <label>${t.description}</label>
+                            <textarea id="findingDescription" rows="4" oninput="updateCurrentFinding('description', this.value)">${escapeHTML(state.currentFinding.description)}</textarea>
+                        </div>
+                        
+                        ${findingGroup('evidence', `<div class="form-group">
                             <label>${t.poc}</label>
                             <textarea id="findingPoc" rows="4" oninput="updateCurrentFinding('poc', this.value)">${escapeHTML(state.currentFinding.poc)}</textarea>
                         </div>
@@ -1094,11 +1328,6 @@ function renderEditor() {
                         <div class="form-group">
                             <label>${t.exploit}</label>
                             <textarea id="findingExploit" class="code-input" rows="6" spellcheck="false" placeholder="${state.lang === 'es' ? 'Pega aquí el código del exploit (se imprimirá como bloque de código en el informe)' : 'Paste the exploit code here (it will be printed as a code block in the report)'}" oninput="updateCurrentFinding('exploit', this.value)">${escapeHTML(state.currentFinding.exploit || '')}</textarea>
-                        </div>
-
-                        <div class="form-group">
-                            <label>${t.impact}</label>
-                            <textarea id="findingImpact" rows="3" oninput="updateCurrentFinding('impact', this.value)">${escapeHTML(state.currentFinding.impact)}</textarea>
                         </div>
 
                         <div class="form-group image-upload-section" onpaste="handleImagePaste(event)">
@@ -1132,12 +1361,19 @@ function renderEditor() {
                         </div>
                         ` : ''}
 
+                        `)}
+${findingGroup('impact', `<div class="form-group">
+                            <label>${t.impact}</label>
+                            <textarea id="findingImpact" rows="3" oninput="updateCurrentFinding('impact', this.value)">${escapeHTML(state.currentFinding.impact)}</textarea>
+                        </div>
+
                         <div class="form-group">
                             <label>${t.remediation}</label>
                             <textarea id="findingRemediation" rows="3" oninput="updateCurrentFinding('remediation', this.value)">${escapeHTML(state.currentFinding.remediation)}</textarea>
                         </div>
 
-                        <div class="form-group">
+                        `)}
+${findingGroup('refs', `<div class="form-group">
                             <label>${t.reference} ${state.lang === 'es' ? '(principal)' : '(primary)'}</label>
                             <input type="text" id="findingReference" value="${escapeHTML(state.currentFinding.reference)}" oninput="updateCurrentFinding('reference', this.value)">
                         </div>
@@ -1158,7 +1394,8 @@ function renderEditor() {
                             </div>
                         </div>
 
-                        ${renderFindingProFieldsEditor()}
+                        `)}
+${renderFindingProFieldsEditor()}
 
                         <div class="form-actions">
                             <button type="submit" class="btn-primary">${state.editingFindingIndex !== null ? t.updateFinding : t.addFinding}</button>
@@ -1168,7 +1405,7 @@ function renderEditor() {
                 </div>
             </div>
 
-            <div class="editor-work-list">
+            <div class="editor-work-list" id="ed-findings">
                 ${renderFindingsList()}
             </div>
         </div>
@@ -1184,17 +1421,9 @@ function renderGeneralInfoCard() {
     const d = state.auditData;
 
     return `
-        <div class="card editor-meta-card editor-meta-card--wide">
+        <div class="card editor-meta-card editor-meta-card--wide" id="ed-general">
             <div class="card-header-row">
                 <h3>${isEs ? 'Información general' : 'General information'}</h3>
-                <button class="btn-primary" onclick="saveCurrentReport()" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;" title="${t.saveReport}">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                        <polyline points="7 3 7 8 15 8"></polyline>
-                    </svg>
-                    <span>${t.saveReport}</span>
-                </button>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -1297,8 +1526,9 @@ function renderExecutiveSummaryCard() {
     const t = UI[state.lang];
     const d = state.auditData;
     return `
-        <div class="card editor-meta-card">
-            <h3>${state.lang === 'es' ? 'Resumen ejecutivo' : 'Executive summary'}</h3>
+        <details class="card editor-meta-card" id="ed-summary" ${editorSectionOpen('summary') ? 'open' : ''} ontoggle="editorToggled('summary', this.open)">
+            <summary><h3>${state.lang === 'es' ? 'Resumen ejecutivo' : 'Executive summary'}</h3></summary>
+            <div class="details-body">
             <div class="form-group">
                 <label for="genAuditSummary">${t.auditSummary}</label>
                 <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.auditSummaryDesc}</small>
@@ -1316,7 +1546,8 @@ function renderExecutiveSummaryCard() {
                 <small style="display:block; color:#666; margin-bottom:0.5rem; font-weight:normal;">${t.recommendedSolutionsDesc}</small>
                 <textarea id="genRecommendedSolutions" rows="4" placeholder="${t.recommendedSolutions}..." oninput="updateAuditData('recommendedSolutions', this.value)">${escapeHTML(d.recommendedSolutions)}</textarea>
             </div>
-        </div>`;
+            </div>
+        </details>`;
 }
 
 const METHODOLOGY_STANDARDS = [
@@ -1346,7 +1577,7 @@ function getScopeFieldVis(key) {
 
 function _scopeFieldToggle(key, isEs) {
     const on = getScopeFieldVis(key);
-    return `<span onclick="toggleScopeField('${key}')" title="${isEs ? 'Incluir en informe' : 'Include in report'}"
+    return `<span role="switch" tabindex="0" aria-checked="${on}" aria-label="${isEs ? 'Incluir en el informe' : 'Include in report'}" onkeydown="switchKey(event)" class="rep-switch" onclick="toggleScopeField('${key}')" title="${isEs ? 'Incluir en informe' : 'Include in report'}"
         style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.75rem;font-weight:500;color:${on ? '#2563eb' : '#9ca3af'};user-select:none;flex-shrink:0;">
         <span style="position:relative;display:inline-block;width:28px;height:16px;">
             <span style="display:block;width:28px;height:16px;border-radius:999px;background:${on ? '#2563eb' : '#d1d5db'};transition:background 0.15s;"></span>
@@ -1382,7 +1613,7 @@ function toggleCurrentFindingField(key) {
 
 function _findingFieldToggle(key, isEs) {
     const on = getFindingFieldVis(state.currentFinding, key);
-    return `<span onclick="toggleCurrentFindingField('${key}')" title="${isEs ? 'Incluir este campo en el informe' : 'Include this field in the report'}"
+    return `<span role="switch" tabindex="0" aria-checked="${on}" aria-label="${isEs ? 'Incluir este campo en el informe' : 'Include this field in the report'}" onkeydown="switchKey(event)" class="rep-switch" onclick="toggleCurrentFindingField('${key}')" title="${isEs ? 'Incluir este campo en el informe' : 'Include this field in the report'}"
         style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.72rem;font-weight:500;color:${on ? '#2563eb' : '#9ca3af'};user-select:none;flex-shrink:0;">
         <span style="position:relative;display:inline-block;width:28px;height:16px;">
             <span style="display:block;width:28px;height:16px;border-radius:999px;background:${on ? '#2563eb' : '#d1d5db'};transition:background 0.15s;"></span>
@@ -1402,7 +1633,7 @@ function renderFindingProFieldsEditor() {
     const cf = state.currentFinding;
 
     return `
-        <details class="pro-fields-details" open>
+        <details class="pro-fields-details" id="ed-pro" ${editorSectionOpen('pro', false) ? 'open' : ''} ontoggle="editorToggled('pro', this.open)">
             <summary>${isEs ? 'Metadatos profesionales (opcional)' : 'Professional metadata (optional)'}</summary>
             <div class="details-body">
                 <div class="form-row">
@@ -1472,7 +1703,7 @@ function renderScopeMethodologySection() {
     const d = state.auditData;
     const selected = d.methodologyStandards || [];
     return `
-        <details class="card editor-meta-card" open>
+        <details class="card editor-meta-card" id="ed-scope" ${editorSectionOpen('scope') ? 'open' : ''} ontoggle="editorToggled('scope', this.open)">
         <summary><h3>${isEs ? 'Alcance y Metodología' : 'Scope & Methodology'}</h3></summary>
         <div class="details-body">
         <div class="form-row">
@@ -1579,7 +1810,7 @@ function renderRevisionHistorySection() {
         ? rows.map(r => escapeHTML(r.version || '?')).join(' · ')
         : (isEs ? 'Sin revisiones registradas.' : 'No revisions recorded.');
     return `
-        <div class="card editor-meta-card editor-meta-card--compact">
+        <div class="card editor-meta-card editor-meta-card--compact" id="ed-revisions">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;">
             <div style="display:flex;align-items:center;gap:0.5rem;">
                 <h3 style="margin:0;">${isEs ? 'Historial de revisiones' : 'Revision history'}</h3>
@@ -1645,7 +1876,7 @@ function renderRevisionModal() {
                     ${renderRevisionRowsEditor()}
                     <button type="button" class="btn-sm btn-secondary" onclick="addRevisionRow()" style="margin-top:0.5rem;">+ ${isEs ? 'Añadir revisión' : 'Add revision'}</button>
                 </div>
-                <div style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem 1.25rem;border-top:1px solid #f1f5f9;">
+                <div style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem 1.25rem;border-top:1px solid #3a3a40;">
                     <button class="btn-primary" onclick="closeRevisionModal()">${isEs ? 'Hecho' : 'Done'}</button>
                 </div>
             </div>
@@ -1682,21 +1913,21 @@ function renderFindingsList() {
             ${header}
             <div class="findings-grid">
                 ${state.findings.map((f, idx) => `
-                    <div class="finding-item severity-${safeSeverity(f.severity)}">
+                    <div class="finding-item severity-${safeSeverity(f.severity)}${state.editingFindingIndex === idx ? ' is-editing' : ''}"${state.editingFindingIndex === idx ? ' aria-current="true"' : ''}>
                         <div class="finding-header">
                             <span class="finding-number">#${idx + 1}</span>
                             <span class="finding-severity">${t.severityLevels[safeSeverity(f.severity)]}</span>
                             <div class="finding-actions">
-                                <button class="btn-edit" onclick="editFinding(${idx})" title="${isEs ? 'Editar' : 'Edit'}">
+                                <button type="button" class="btn-edit" onclick="editFinding(${idx})" title="${isEs ? 'Editar' : 'Edit'}" aria-label="${isEs ? 'Editar hallazgo' : 'Edit finding'} #${idx + 1}">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                     </svg>
                                 </button>
-                                <button class="btn-delete" onclick="deleteFinding(${idx})" title="${isEs ? 'Eliminar' : 'Delete'}">×</button>
+                                <button type="button" class="btn-delete" onclick="deleteFinding(${idx})" title="${isEs ? 'Eliminar' : 'Delete'}" aria-label="${isEs ? 'Eliminar hallazgo' : 'Delete finding'} #${idx + 1}"><span aria-hidden="true">×</span></button>
                             </div>
                         </div>
-                        <span class="finding-title">${escapeHTML(f.title)}</span>
+                        <button type="button" class="finding-title finding-title-btn" onclick="editFinding(${idx})">${escapeHTML(f.title)}</button>
                     </div>
                 `).join('')}
             </div>
@@ -1950,7 +2181,7 @@ function uniqueThemeSlug(name) {
         .replace(/^-+|-+$/g, '');
     if (!base) base = 'tema';
     base = base.slice(0, 40);
-    const existing = new Set((state.customThemes || []).map(t => t.slug));
+    const existing = new Set((state.customThemes || []).map(t => t.slug).concat([BUILTIN_THEME_SLUG]));
     if (!existing.has(base)) return base;
     let i = 2;
     while (existing.has(`${base}-${i}`)) i++;
@@ -1965,24 +2196,30 @@ async function loadCustomThemes() {
     }
 }
 
-function listAllThemes() {
-    return (state.customThemes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+// Tema por defecto (integrado): vive en el código, NO en la base de datos. Por
+// eso siempre existe, no se puede borrar ni editar y no depende de nada que el
+// usuario pueda romper. Es la referencia para crear temas nuevos (Duplicar) y
+// el tema al que volver si uno propio sale mal.
+const BUILTIN_THEME_SLUG = 'default';
+function getBuiltinTheme() {
+    return {
+        id: null,
+        slug: BUILTIN_THEME_SLUG,
+        name: state.lang === 'es' ? 'Pwnly (por defecto)' : 'Pwnly (default)',
+        html_template: DEFAULT_THEME_TEMPLATE_HTML,
+        custom_css: DEFAULT_THEME_TEMPLATE_CSS,
+        builtin: true
+    };
 }
 
-// Tema implícito usado mientras el usuario no haya creado ninguno propio (o
-// el seleccionado ya no exista): así el informe siempre se puede generar,
-// sin bloquear al usuario con una pantalla vacía. No aparece en "Temas" como
-// tarjeta seleccionable ni se guarda en BD: es sólo un valor de reserva.
-const DEFAULT_FALLBACK_THEME = { slug: '', name: 'Por defecto', html_template: '', custom_css: '' };
+// Siempre devuelve el tema por defecto primero y después los del usuario.
+function listAllThemes() {
+    const custom = (state.customThemes || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    return [getBuiltinTheme(), ...custom];
+}
 
 function getActiveTheme() {
-    const found = (state.customThemes || []).find(t => t.slug === state.reportTheme);
-    if (found) return found;
-    return {
-        ...DEFAULT_FALLBACK_THEME,
-        html_template: DEFAULT_THEME_TEMPLATE_HTML,
-        custom_css: DEFAULT_THEME_TEMPLATE_CSS
-    };
+    return listAllThemes().find(t => t.slug === state.reportTheme) || getBuiltinTheme();
 }
 
 // Inyecta SOLO el CSS del tema activo (no todos a la vez: cada tema es CSS
@@ -1995,11 +2232,69 @@ function injectThemeStyles() {
         document.head.appendChild(style);
     }
     const theme = getActiveTheme();
-    style.textContent = theme ? (theme.custom_css || '') : '';
+    // El CSS del tema es del usuario y afecta SOLO al informe: se confina a
+    // .preview-container para que nunca pueda tocar la interfaz de la app.
+    style.textContent = theme ? scopeReportCss(theme.custom_css || '') : '';
+}
+
+// Confina el CSS de un tema de informe al contenedor del informe. Reglas
+// :root/html/body pasan a ser el propio contenedor; @media/@supports se procesan
+// recursivamente; @page/@font-face/@keyframes se dejan tal cual (son globales
+// por naturaleza y no afectan a la interfaz).
+const REPORT_SCOPE = '.preview-container';
+function scopeReportCss(css) {
+    if (!css || !css.trim()) return '';
+    // En la vista de impresión/export la página ES el informe: CSS sin confinar
+    // (así body/@page del tema controlan todo el PDF).
+    if (new URLSearchParams(window.location.search).get('print_mode') === 'true') return css;
+    const splitSelectors = (text) => {
+        const out = []; let depth = 0, quote = '', cur = '';
+        for (const ch of text) {
+            if (quote) { cur += ch; if (ch === quote) quote = ''; continue; }
+            if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; }
+            if (ch === '(' || ch === '[') depth++;
+            if (ch === ')' || ch === ']') depth--;
+            if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+            cur += ch;
+        }
+        if (cur.trim()) out.push(cur);
+        return out.map(s => s.trim()).filter(Boolean);
+    };
+    const scopeSelector = (sel) => {
+        if (/^(\.preview-container|#_pdf_inner|\[data-rt-theme)/.test(sel)) return sel;
+        const m = sel.match(/^(:root|html|body)(?![\w-])/i);
+        if (m) return REPORT_SCOPE + sel.slice(m[0].length);
+        return REPORT_SCOPE + ' ' + sel;
+    };
+    const walk = (rules) => {
+        let out = '';
+        for (const r of rules) {
+            if (r.type === CSSRule.STYLE_RULE) {
+                out += splitSelectors(r.selectorText).map(scopeSelector).join(', ') + ' { ' + r.style.cssText + ' }\n';
+            } else if (r.cssRules && (r.type === CSSRule.MEDIA_RULE || r.type === CSSRule.SUPPORTS_RULE)) {
+                const head = r.cssText.slice(0, r.cssText.indexOf('{')).trim();
+                out += head + ' {\n' + walk(r.cssRules) + '}\n';
+            } else if (r.type === CSSRule.IMPORT_RULE) {
+                continue; // sin @import externos dentro de un tema
+            } else {
+                out += r.cssText + '\n';
+            }
+        }
+        return out;
+    };
+    try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(css);
+        return walk(sheet.cssRules);
+    } catch (e) {
+        return REPORT_SCOPE + ' {\n' + css + '\n}';
+    }
 }
 
 function applyThemeAttributes(slug) {
-    document.documentElement.setAttribute('data-rt-theme', slug || '');
+    // El slug del tema solo se aplica al contenedor del informe (data-rt-theme en
+    // .preview-container), nunca a <html>: tema de la app y tema del informe son independientes.
+    document.documentElement.removeAttribute('data-rt-theme');
     injectThemeStyles();
 }
 
@@ -2027,57 +2322,107 @@ function renderThemesPage() {
     if (!state.showThemesPage || state.showSplash) return '';
     const isEs = state.lang === 'es';
     const themes = listAllThemes();
+    const lock = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+    const activeTheme = getActiveTheme();
 
     return `
         <div class="themes-page">
             <div class="themes-page-header">
                 <div>
-                    <h1>${isEs ? 'Temas' : 'Themes'}</h1>
+                    <h1>${isEs ? 'Temas del informe' : 'Report themes'}</h1>
                     <p class="themes-page-sub">${isEs
-                        ? 'Crea tus propios temas de informe: HTML y CSS 100% tuyos, sin plantillas impuestas.'
-                        : 'Build your own report themes: 100% your own HTML and CSS, no imposed templates.'}</p>
+                        ? 'Los temas controlan solo el aspecto del informe (PDF/HTML). El tema por defecto siempre existe y es de solo lectura: úsalo como referencia, duplícalo para crear uno nuevo o vuelve a él si un tema tuyo sale mal.'
+                        : 'Themes control only the look of the report (PDF/HTML). The default theme always exists and is read-only: use it as a reference, duplicate it to start a new one, or go back to it if one of yours turns out wrong.'}</p>
                 </div>
                 <button class="btn-primary" onclick="openThemeEditor(null)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     ${isEs ? 'Nuevo tema' : 'New theme'}
                 </button>
             </div>
 
-            ${themes.length === 0 ? `
-                <div class="empty-state">
-                    <p>${isEs ? 'Todavía no has creado ningún tema.' : "You haven't created any theme yet."}</p>
-                    <p class="text-muted">${isEs ? 'Crea el primero para poder generar el informe (PDF/HTML).' : 'Create the first one to be able to generate the report (PDF/HTML).'}</p>
-                </div>
-            ` : `
-                <div class="themes-grid">
-                    ${themes.map(th => {
-                        const active = state.reportTheme === th.slug;
-                        return `
-                        <div class="theme-card2 ${active ? 'active' : ''}">
-                            <div class="theme-card2-head">
-                                <span class="theme-card2-name">${escapeHTML(th.name)}</span>
+            ${!activeTheme.builtin ? `
+                <div class="themes-restore" role="status">
+                    <span>${isEs ? 'Tema activo:' : 'Active theme:'} <strong>${escapeHTML(activeTheme.name)}</strong></span>
+                    <button type="button" class="btn-sm btn-secondary" onclick="setReportTheme('${BUILTIN_THEME_SLUG}')">${isEs ? 'Volver al tema por defecto' : 'Back to the default theme'}</button>
+                </div>` : ''}
+
+            <div class="themes-grid">
+                ${themes.map(th => {
+                    const active = state.reportTheme === th.slug || (th.builtin && !listAllThemes().some(t => t.slug === state.reportTheme));
+                    const nm = escapeHTML(th.name);
+                    const slugAttr = escapeHTML(th.slug);
+                    return `
+                    <article class="theme-card2 ${active ? 'active' : ''} ${th.builtin ? 'builtin' : ''}" aria-label="${nm}">
+                        <div class="theme-card2-thumb" aria-hidden="true">
+                            <iframe tabindex="-1" sandbox title="" data-theme-thumb="${slugAttr}"></iframe>
+                        </div>
+                        <div class="theme-card2-head">
+                            <span class="theme-card2-name">${nm}</span>
+                            <span class="theme-card2-badges">
+                                ${th.builtin ? `<span class="theme-card2-badge theme-card2-badge--ref">${lock}${isEs ? 'Por defecto' : 'Default'}</span>` : ''}
                                 ${active ? `<span class="theme-card2-badge">${isEs ? 'Activo' : 'Active'}</span>` : ''}
-                            </div>
-                            <div class="theme-card2-actions">
-                                ${!active ? `<button class="btn-sm btn-secondary" onclick="setReportTheme('${th.slug}')">${isEs ? 'Usar' : 'Use'}</button>` : ''}
-                                <button class="btn-sm btn-secondary" onclick="openThemeEditor('${th.slug}')">${isEs ? 'Editar' : 'Edit'}</button>
-                                <button class="btn-sm btn-secondary" onclick="exportTheme('${th.slug}')">${isEs ? 'Exportar' : 'Export'}</button>
-                                <button class="btn-sm btn-danger" onclick="deleteCustomTheme(${th.id}, '${th.slug}')">${isEs ? 'Eliminar' : 'Delete'}</button>
-                            </div>
-                        </div>`;
-                    }).join('')}
-                </div>
-            `}
+                            </span>
+                        </div>
+                        ${th.builtin ? `<p class="theme-card2-note">${isEs ? 'Solo lectura. Referencia para crear nuevos temas.' : 'Read-only. Reference for creating new themes.'}</p>` : ''}
+                        <div class="theme-card2-actions">
+                            ${!active ? `<button class="btn-sm btn-primary" onclick="setReportTheme('${slugAttr}')" aria-label="${isEs ? 'Usar el tema' : 'Use theme'} ${nm}">${isEs ? 'Usar' : 'Use'}</button>` : ''}
+                            ${!th.builtin ? `<button class="btn-sm btn-secondary" onclick="openThemeEditor('${slugAttr}')" aria-label="${isEs ? 'Editar el tema' : 'Edit theme'} ${nm}">${isEs ? 'Editar' : 'Edit'}</button>` : ''}
+                            <button class="btn-sm btn-secondary" onclick="duplicateTheme('${slugAttr}')" aria-label="${isEs ? 'Duplicar el tema' : 'Duplicate theme'} ${nm}">${isEs ? 'Duplicar' : 'Duplicate'}</button>
+                            <button class="btn-sm btn-secondary" onclick="exportTheme('${slugAttr}')" aria-label="${isEs ? 'Exportar el tema' : 'Export theme'} ${nm}">${isEs ? 'Exportar' : 'Export'}</button>
+                            ${!th.builtin ? `<button class="btn-sm btn-danger" onclick="deleteCustomTheme(${th.id}, '${slugAttr}')" aria-label="${isEs ? 'Eliminar el tema' : 'Delete theme'} ${nm}">${isEs ? 'Eliminar' : 'Delete'}</button>` : ''}
+                        </div>
+                    </article>`;
+                }).join('')}
+            </div>
 
             <div class="themes-page-import">
                 <label class="btn-secondary theme-import-label">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     ${isEs ? 'Importar tema (.html)' : 'Import theme (.html)'}
                     <input type="file" accept=".html,.htm,text/html" style="display:none" onchange="importThemeFile(this)">
                 </label>
             </div>
         </div>
     `;
+}
+
+// Duplicar (también el tema por defecto): abre el editor con una copia nueva.
+function duplicateTheme(slug) {
+    const src = listAllThemes().find(t => t.slug === slug);
+    if (!src) return;
+    const isEs = state.lang === 'es';
+    state.themeEditor = {
+        slug: null,
+        name: (src.builtin ? (isEs ? 'Mi tema' : 'My theme') : src.name + (isEs ? ' (copia)' : ' (copy)')),
+        html: src.html_template || '',
+        css: src.custom_css || '',
+        isNew: true
+    };
+    state.themeEditorTab = 'html';
+    state.isThemeStudio = true;
+    renderApp();
+    refreshThemeEditorPreview();
+}
+
+// Miniaturas reales de cada tema (iframe aislado y sin scripts, datos de ejemplo).
+function renderThemeThumbs() {
+    const frames = document.querySelectorAll('iframe[data-theme-thumb]');
+    if (!frames.length) return;
+    const ctx = buildSampleReportContext();
+    const all = listAllThemes();
+    frames.forEach(fr => {
+        const th = all.find(t => t.slug === fr.dataset.themeThumb);
+        if (!th) return;
+        let body;
+        try { body = ThemeEngine.render(th.html_template || '', ctx); } catch (e) { body = '<p style="padding:2rem;font-family:sans-serif;color:#b91c1c">Error en la plantilla</p>'; }
+        fr.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}body{overflow:hidden}</style><style>${th.custom_css || ''}</style></head><body>${body}</body></html>`;
+        const box = fr.parentElement;
+        const w = 820;
+        fr.style.width = w + 'px';
+        fr.style.height = '1160px';
+        const s = (box.clientWidth || 260) / w;
+        fr.style.transform = 'scale(' + s + ')';
+    });
 }
 
 // --------------------------------------------------------------------------- //
@@ -2127,6 +2472,7 @@ function renderThemeStudio() {
                         value="${escapeHTML(ed.name)}" oninput="themeEditorSetName(this.value)">
                 </div>
                 <div class="ts-head-actions">
+                    <button class="btn-sm btn-secondary" onclick="themeEditorResetToDefault()" title="${isEs ? 'Reemplaza el HTML y el CSS por los del tema por defecto' : 'Replace HTML and CSS with the default theme'}">${isEs ? 'Restablecer al tema por defecto' : 'Reset to default theme'}</button>
                     <button class="btn-sm btn-secondary" onclick="closeThemeEditor()">${isEs ? 'Cancelar' : 'Cancel'}</button>
                     <button class="btn-sm btn-primary" onclick="saveThemeFromEditor()">${isEs ? 'Guardar' : 'Save'}</button>
                 </div>
@@ -2156,6 +2502,16 @@ function renderThemeStudio() {
             </div>
         </div>
     `;
+}
+
+function themeEditorResetToDefault() {
+    const isEs = state.lang === 'es';
+    if (!state.themeEditor) return;
+    if (!confirm(isEs ? 'Se reemplazará el HTML y el CSS de este tema por los del tema por defecto (aún no se guarda). ¿Continuar?' : 'This replaces this theme\'s HTML and CSS with the default theme (not saved yet). Continue?')) return;
+    state.themeEditor.html = DEFAULT_THEME_TEMPLATE_HTML;
+    state.themeEditor.css = DEFAULT_THEME_TEMPLATE_CSS;
+    renderApp();
+    refreshThemeEditorPreview();
 }
 
 function themeEditorSetName(v) {
@@ -2228,8 +2584,9 @@ async function deleteCustomTheme(id, slug) {
     try {
         await API.themes.delete(id);
         await loadCustomThemes();
+        if (state.pdfPrintTheme === slug) state.pdfPrintTheme = BUILTIN_THEME_SLUG;
         if (state.reportTheme === slug) {
-            state.reportTheme = (state.customThemes[0] && state.customThemes[0].slug) || '';
+            state.reportTheme = BUILTIN_THEME_SLUG;
             applyThemeAttributes(state.reportTheme);
             persistSettings();
         }
@@ -2255,7 +2612,7 @@ function _downloadText(text, filename, mime) {
 // navegador sin que el motor de temas se ejecute). Pensado para reimportarse
 // con "Importar tema" o editarse a mano y volver a subirlo.
 function exportTheme(slug) {
-    const th = (state.customThemes || []).find(t => t.slug === slug);
+    const th = listAllThemes().find(t => t.slug === slug);
     if (!th) return;
     const bundle = `<!doctype html>
 <!--
@@ -2993,7 +3350,7 @@ function renderPdfModal() {
     const isEs = state.lang === 'es';
     // Estilos de la propia ventana del modal (chrome de la app): fijos, no
     // dependen del tema del informe (cada tema es CSS 100% libre del usuario).
-    const c = { border: '#e5e7eb', cardBg: '#f9fafb', textMuted: '#6b7280', textFaint: '#9ca3af', textHeading: '#111827' };
+    const c = { border: '#3a3a40', cardBg: '#1c1c1f', textMuted: '#a1a1aa', textFaint: '#8b8b95', textHeading: '#fafafa' };
     const themes = listAllThemes();
 
     function themeCard(th) {
@@ -3011,8 +3368,8 @@ function renderPdfModal() {
     const toggleOn  = state.pdfShowSeverityBars;
     const toggleBg  = toggleOn ? '#3b82f6' : c.border;
     const thumbLeft = toggleOn ? '22px' : '2px';
-    const panelBg   = '#dde3ea';
-    const dotMuted  = '#b0bec5';
+    const panelBg   = '#111113';
+    const dotMuted  = '#71717a';
 
     return `
         <div class="settings-overlay" style="align-items:center;justify-content:center;padding:1rem;" onclick="closePdfModal()">
@@ -3126,7 +3483,7 @@ function closePdfModal() {
 
 function pdfModalSetTheme(theme) {
     state.pdfPrintTheme = theme;
-    const border = '#e5e7eb', cardBg = '#f9fafb', textMuted = '#6b7280';
+    const border = '#3a3a40', cardBg = '#1c1c1f', textMuted = '#a1a1aa';
     listAllThemes().forEach(th => {
         const btn = document.getElementById('pdf-theme-btn-' + th.slug);
         if (!btn) return;
@@ -3142,7 +3499,7 @@ function pdfModalSetTheme(theme) {
 
 function pdfModalSetBars(checked) {
     state.pdfShowSeverityBars = checked;
-    const border = '#e5e7eb';
+    const border = '#3a3a40';
     const bg    = document.getElementById('pdf-toggle-bg');
     const thumb = document.getElementById('pdf-toggle-thumb');
     if (bg)    bg.style.background = checked ? '#3b82f6' : border;
@@ -3527,6 +3884,8 @@ function renderApp() {
         ${renderRevisionModal()}
         ${renderPasswordWarningModal()}
     `;
+    postRenderEditor();
+    renderThemeThumbs();
 }
 
 // Aviso al entrar con las credenciales por defecto (admin/admin). El usuario
@@ -3600,7 +3959,7 @@ async function doLogin(event) {
         // tema guardado (la cookie no existía durante el arranque inicial).
         await loadCustomThemes();
         const savedTheme = localStorage.getItem('pwnly_theme');
-        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
+        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : BUILTIN_THEME_SLUG;
         await loadSettings();
         applyThemeAttributes(state.reportTheme);
         // Si se inició sesión directamente en la página de cuenta, cargamos usuarios.
@@ -3639,7 +3998,7 @@ async function doSetup(event) {
         state.setupError = '';
         await loadCustomThemes();
         const savedTheme = localStorage.getItem('pwnly_theme');
-        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
+        state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : BUILTIN_THEME_SLUG;
         await loadSettings();
         applyThemeAttributes(state.reportTheme);
         if (state.isAccountView) {
@@ -4503,12 +4862,8 @@ function editFinding(index) {
 
     state.editingFindingIndex = index;
 
-    const form = document.getElementById('findingForm');
-    if (form) {
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
     renderApp();
+    focusFindingForm();
 }
 
 async function handleImageUpload(event) {
@@ -5062,7 +5417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         // Cargamos los temas personalizados para que el PDF pueda usar cualquiera.
         await loadCustomThemes();
-        state.reportTheme = (themeParam && listAllThemes().some(t => t.slug === themeParam)) ? themeParam : ((state.customThemes[0] && state.customThemes[0].slug) || '');
+        state.reportTheme = (themeParam && listAllThemes().some(t => t.slug === themeParam)) ? themeParam : BUILTIN_THEME_SLUG;
         applyThemeAttributes(state.reportTheme);
         if (params.get('show_severity_bars') === 'false') {
             state.pdfShowSeverityBars = false;
@@ -5125,7 +5480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // para que la exportación capture el 100% del estado.
             await loadCustomThemes();
             const savedTheme = localStorage.getItem('pwnly_theme');
-            state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : ((state.customThemes[0] && state.customThemes[0].slug) || '');
+            state.reportTheme = (savedTheme && listAllThemes().some(t => t.slug === savedTheme)) ? savedTheme : BUILTIN_THEME_SLUG;
             await loadSettings();
             applyThemeAttributes(state.reportTheme);
             // En la página de cuenta cargamos usuarios y API keys.

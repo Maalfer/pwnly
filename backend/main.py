@@ -665,6 +665,10 @@ def create_theme(payload: schemas.ThemeCreate, db: Session = Depends(get_db), _u
     if not name:
         raise HTTPException(status_code=400, detail="El nombre del tema no puede estar vacío")
 
+    if payload.slug.strip().lower() == "default":
+        # "default" es el tema integrado (siempre disponible y de solo lectura).
+        raise HTTPException(status_code=400, detail='El identificador default está reservado al tema por defecto')
+
     existing = db.query(models.Theme).filter(models.Theme.slug == payload.slug).first()
     if existing:
         # Upsert: actualizar tema existente.
