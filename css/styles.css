@@ -6372,3 +6372,21 @@ html[data-theme="dark"] { --input-bg: #1c1c1f; --border: #3a3a40; --card: #23232
 @media (min-width: 420px) and (max-width: 760px) {
     .reports-actions { grid-template-columns: 1fr 1fr; }
 }
+
+
+/* ---- PDF: el contenedor del informe ocupa el ancho útil de la página (los márgenes los define
+   @page del tema, o el @page por defecto de arriba) y respeta el "ancho del contenido" elegido. ---- */
+@media print {
+    .preview-container {
+        width: auto !important;
+        max-width: min(100%, var(--pdf-w, 100%)) !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Botones primarios con contraste AA también en la vista de impresión (sin modo oscuro) */
+html:not([data-theme]) .btn-primary, html:not([data-theme]) .login-btn { background: #2563eb; border-color: #2563eb; color: #fff; }

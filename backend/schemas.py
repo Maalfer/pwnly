@@ -307,22 +307,11 @@ def _decode_css_escapes(css: str) -> str:
     return css
 
 
-def sanitize_css_source(css) -> str:
-    """Sanea CSS libre escrito por el usuario antes de inyectarlo en un <style>.
+MAX_THEME_CSS = 200_000   # alineado con el límite de la plantilla HTML
 
-    Elimina lo que permitiría romper el <style>, inyectar HTML/JS o hacer
-    peticiones externas (SSRF al imprimir): etiquetas, @import, expression(),
-    javascript:, behavior y url() que no sean data: o fragmentos locales.
-    """
-    if not isinstance(css, str):
-        return ''
-    css = css[:8000]
-    # Neutraliza escapes CSS (\75 -> "u", etc.) antes del blocklist para que
-    # no se puedan usar para reconstruir palabras clave bloqueadas.
-    css = _decode_css_escapes(css)
-    # Nada de etiquetas HTML ni cierre de <style>.
-    css = css.replace('<', '').replace('>', '')
-    # Construcciones peligrosas fuera.
+
+def _strip_dangerous_css(css: str) -> str:
+    """Elimina construcciones peligrosas (peticiones externas, JS, HTML)."""
     css = re.sub(r'@import[^;]*;?', '', css, flags=re.IGNORECASE)
     css = re.sub(r'expression\s*\([^)]*\)', '', css, flags=re.IGNORECASE)
     css = re.sub(r'(javascript|vbscript)\s*:', '', css, flags=re.IGNORECASE)
@@ -333,8 +322,34 @@ def sanitize_css_source(css) -> str:
     def _url(m):
         inner = m.group(1).strip().strip('\'"').lower()
         return m.group(0) if (inner.startswith('data:') or inner.startswith('#')) else 'none'
-    css = re.sub(r'url\(([^)]*)\)', _url, css, flags=re.IGNORECASE)
-    return css
+    return re.sub(r'url\(([^)]*)\)', _url, css, flags=re.IGNORECASE)
+
+
+def sanitize_css_source(css) -> str:
+    """Sanea CSS libre escrito por el usuario antes de inyectarlo en un <style>.
+
+    Elimina lo que permitiría romper el <style>, inyectar HTML/JS o hacer
+    peticiones externas (SSRF al imprimir): etiquetas, @import, expression(),
+    javascript:, behavior y url() que no sean data: o fragmentos locales.
+
+    Se conserva el CSS legítimo: el combinador hijo ">", los escapes CSS válidos y
+    hojas largas (hasta MAX_THEME_CSS caracteres).
+    """
+    if not isinstance(css, str):
+        return ''
+    css = css[:MAX_THEME_CSS]
+    # Fuera etiquetas HTML completas (</style>, <script>...) y cualquier "<" suelto: es lo único
+    # que puede cerrar el <style>. El ">" del combinador hijo no se toca.
+    css = re.sub(r'<\s*/?\s*[A-Za-z!][^>]*>', '', css).replace('<', '')
+    # Los escapes (\75 -> "u") pueden reconstruir palabras bloqueadas ("\75 rl("). Se
+    # comprueba la versión decodificada: si al decodificar aparece algo bloqueado, se
+    # usa esa versión saneada; si no, se conserva el original (con sus escapes legítimos,
+    # p. ej. content: "\201C").
+    decoded = _decode_css_escapes(css)
+    cleaned_decoded = _strip_dangerous_css(decoded)
+    if cleaned_decoded != decoded:
+        return cleaned_decoded
+    return _strip_dangerous_css(css)
 
 
 def sanitize_html_template(html) -> str:

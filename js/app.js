@@ -1947,228 +1947,369 @@ function renderFindingsList() {
 // completamente editable/sustituible, pensado para enseñar toda la sintaxis
 // del motor de plantillas (ThemeEngine) y las variables disponibles.
 // --------------------------------------------------------------------------- //
-const DEFAULT_THEME_TEMPLATE_HTML = `<div class="cover">
+const DEFAULT_THEME_TEMPLATE_HTML = `<header class="cover" aria-labelledby="rpt-title">
   {{#if client_logo}}
   <div class="cover-logos">
-    {{#each client_logo}}<img src="{{this}}" alt="logo" class="cover-logo">{{/each}}
+    {{#each client_logo}}<img src="{{this}}" alt="{{labels.logo}} {{@index1}}" class="cover-logo">{{/each}}
   </div>
   {{/if}}
-  <h1 class="cover-title">{{document_title}}</h1>
-  <p class="cover-target">{{target_asset}}</p>
-  <span class="badge badge-classif">{{classification_label}}</span>
+  {{#if audit_type_label}}<p class="cover-kicker">{{audit_type_label}}</p>{{/if}}
+  <h1 id="rpt-title" class="cover-title">{{document_title}}</h1>
+  {{#if target_asset}}<p class="cover-target">{{target_asset}}</p>{{/if}}
+  <p class="cover-class"><span class="badge badge-classif">{{labels.classification}}: {{classification_label}}</span></p>
 
-  <div class="cover-meta">
-    <div><span class="cover-meta-label">Cliente</span><strong>{{client_company}}</strong></div>
-    <div><span class="cover-meta-label">Auditor</span><strong>{{auditor_company}}</strong><br>{{auditor_name}}</div>
-    <div><span class="cover-meta-label">Fecha</span><strong>{{date}}</strong></div>
-    <div><span class="cover-meta-label">Versión</span><strong>{{version}}</strong></div>
-  </div>
-</div>
+  <dl class="cover-meta">
+    {{#if client_company}}<div><dt>{{labels.client}}</dt><dd>{{client_company}}</dd></div>{{/if}}
+    {{#if auditor_company}}<div><dt>{{labels.auditor}}</dt><dd>{{auditor_company}}{{#if auditor_name}}<span class="sub">{{auditor_name}}</span>{{/if}}{{#if auditor_email}}<span class="sub">{{auditor_email}}</span>{{/if}}</dd></div>{{/if}}
+    {{#if date_formatted}}<div><dt>{{labels.date}}</dt><dd>{{date_formatted}}</dd></div>{{/if}}
+    {{#if version}}<div><dt>{{labels.version}}</dt><dd>{{version}}</dd></div>{{/if}}
+  </dl>
+</header>
 
-<div class="toc">
-  <h2>Índice</h2>
-  <a class="toc-item" href="#resumen"><span>Resumen ejecutivo</span></a>
-  {{#if scope.show}}<a class="toc-item" href="#alcance"><span>Alcance y metodología</span></a>{{/if}}
-  <a class="toc-item" href="#hallazgos"><span>Hallazgos técnicos</span></a>
-  {{#each findings}}
-  <a class="toc-item toc-finding" href="#finding-{{this.index}}">
-    <span>{{this.index1}}. {{this.title}}</span>
-    <span class="badge sev-{{this.severity}}">{{this.severity_label}}</span>
-  </a>
-  {{/each}}
-</div>
+<nav class="toc" aria-labelledby="toc-title">
+  <h2 id="toc-title" class="toc-title">{{labels.toc}}</h2>
+  <ol class="toc-list">
+    <li><a class="toc-item" href="#resumen">{{labels.summary}}</a></li>
+    {{#if scope.show}}<li><a class="toc-item" href="#alcance">{{labels.scope}}</a></li>{{/if}}
+    <li>
+      <a class="toc-item" href="#hallazgos">{{labels.findings}}</a>
+      {{#if findings}}
+      <ol class="toc-sub">
+        {{#each findings}}
+        <li><a class="toc-item toc-finding" href="#finding-{{this.index}}"><span class="toc-code">{{this.code}}</span><span class="toc-name">{{this.title}}</span><span class="badge sev-bg-{{this.severity}}">{{this.severity_label}}</span></a></li>
+        {{/each}}
+      </ol>
+      {{/if}}
+    </li>
+    {{#if revision_history}}<li><a class="toc-item" href="#versiones">{{labels.revisions}}</a></li>{{/if}}
+  </ol>
+</nav>
 
-<div id="resumen" class="section">
-  <h2 class="section-title">Resumen ejecutivo</h2>
-
-  {{#if show_severity_bars}}
-  <div class="summary-bar">
-    {{#each severity_breakdown}}
-    {{#if this.count}}<div class="summary-bar-seg sev-bg-{{this.key}}" style="width:{{this.percent}}%" title="{{this.label}}: {{this.count}}"></div>{{/if}}
-    {{/each}}
-  </div>
-  {{/if}}
-
-  <div class="summary-legend">
-    {{#each severity_breakdown}}
-    <div class="legend-item"><span class="legend-dot sev-bg-{{this.key}}"></span>{{this.label}} <strong>{{this.count}}</strong></div>
-    {{/each}}
-  </div>
+<section id="resumen" class="section" aria-labelledby="resumen-title">
+  <h2 id="resumen-title" class="section-title">{{labels.summary}}</h2>
 
   {{#if audit_summary}}<div class="rich-text">{{{audit_summary_html}}}</div>{{/if}}
 
-  {{#if risk_matrix_has_data}}
-  <h3>Matriz de riesgo (Probabilidad × Impacto)</h3>
-  <table class="risk-matrix">
-    <tr><th></th><th>Imp. Alta</th><th>Imp. Media</th><th>Imp. Baja</th></tr>
-    {{#each risk_matrix_rows}}
-    <tr>
-      <th>Prob. {{this.likelihood_label}}</th>
-      {{#each this.cells}}<td class="risk-cell risk-{{this.level}}">{{this.count}}</td>{{/each}}
-    </tr>
+  <h3>{{labels.distribution}}</h3>
+  {{#if show_severity_bars}}
+  <div class="summary-bar" aria-hidden="true">
+    {{#each severity_breakdown}}
+    {{#if this.count}}<div class="summary-bar-seg sev-bg-{{this.key}}" style="width:{{this.percent}}%"></div>{{/if}}
     {{/each}}
+  </div>
+  {{/if}}
+  <ul class="summary-legend">
+    {{#each severity_breakdown}}
+    <li class="legend-item"><span class="legend-dot sev-bg-{{this.key}}" aria-hidden="true"></span>{{this.label}}: <strong>{{this.count}}</strong></li>
+    {{/each}}
+  </ul>
+
+  {{#if findings}}
+  <h3>{{labels.overview}}</h3>
+  <table class="data-table overview">
+    <caption class="visually-hidden">{{labels.overview}}</caption>
+    <thead>
+      <tr><th scope="col">{{labels.id}}</th><th scope="col">{{labels.finding}}</th><th scope="col">{{labels.severity}}</th><th scope="col">{{labels.cvss}}</th><th scope="col">{{labels.status}}</th></tr>
+    </thead>
+    <tbody>
+      {{#each findings}}
+      <tr>
+        <th scope="row" class="mono">{{this.code}}</th>
+        <td><a href="#finding-{{this.index}}">{{this.title}}</a></td>
+        <td><span class="badge sev-bg-{{this.severity}}">{{this.severity_label}}</span></td>
+        <td>{{#if this.cvss}}{{this.cvss}}{{else}}&mdash;{{/if}}</td>
+        <td>{{this.status_label}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
   </table>
   {{/if}}
 
-  <h3>Incidencias detectadas durante las pruebas</h3>
+  {{#if tests_performed}}<h3>{{labels.tests}}</h3><div class="rich-text">{{{tests_performed_html}}}</div>{{/if}}
+  {{#if recommended_solutions}}<h3>{{labels.solutions}}</h3><div class="rich-text">{{{recommended_solutions_html}}}</div>{{/if}}
+
+  {{#if risk_matrix_has_data}}
+  <h3>{{labels.risk_matrix}}</h3>
+  <table class="data-table risk-matrix">
+    <caption class="visually-hidden">{{labels.risk_matrix}}</caption>
+    <thead>
+      <tr><th scope="col">{{labels.likelihood}} / {{labels.impact}}</th><th scope="col">{{labels.impact}}: {{labels.risk_high}}</th><th scope="col">{{labels.impact}}: {{labels.risk_med}}</th><th scope="col">{{labels.impact}}: {{labels.risk_low}}</th></tr>
+    </thead>
+    <tbody>
+      {{#each risk_matrix_rows}}
+      <tr>
+        <th scope="row">{{labels.likelihood}}: {{this.likelihood_label}}</th>
+        {{#each this.cells}}<td class="risk-cell risk-{{this.level}}"><strong>{{this.count}}</strong><span>{{this.level_label}}</span></td>{{/each}}
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{/if}}
+
+  <h3>{{labels.incidents}}</h3>
   {{#if has_incidents}}
   <div class="callout callout-warning">{{{incidents_html}}}</div>
   {{else}}
-  <div class="callout callout-ok">No se registraron incidencias durante la ejecución de las pruebas.</div>
+  <div class="callout callout-ok">{{labels.no_incidents}}</div>
   {{/if}}
-</div>
+</section>
 
 {{#if scope.show}}
-<div id="alcance" class="section">
-  <h2 class="section-title">Alcance y metodología</h2>
-  {{#if scope.show_dates}}<p><strong>Ventana del engagement:</strong> {{scope.engagement_start}} &rarr; {{scope.engagement_end}}</p>{{/if}}
-  {{#if scope.show_scope_in}}<h3>Dentro del alcance</h3><pre class="mono-block">{{scope.scope_in}}</pre>{{/if}}
-  {{#if scope.show_scope_out}}<h3>Fuera del alcance</h3><pre class="mono-block">{{scope.scope_out}}</pre>{{/if}}
+<section id="alcance" class="section" aria-labelledby="alcance-title">
+  <h2 id="alcance-title" class="section-title">{{labels.scope}}</h2>
+  {{#if scope.show_dates}}<p><strong>{{labels.window}}:</strong> {{scope.engagement_start}} &rarr; {{scope.engagement_end}}</p>{{/if}}
+  {{#if scope.show_scope_in}}<h3>{{labels.in_scope}}</h3><pre class="mono-block">{{scope.scope_in}}</pre>{{/if}}
+  {{#if scope.show_scope_out}}<h3>{{labels.out_scope}}</h3><pre class="mono-block">{{scope.scope_out}}</pre>{{/if}}
   {{#if scope.show_standards}}
-  <h3>Metodologías y estándares</h3>
-  <div class="tags">{{#each scope.standards}}<span class="tag">{{this.label}}</span>{{/each}}</div>
+  <h3>{{labels.standards}}</h3>
+  <ul class="tags">{{#each scope.standards}}<li class="tag">{{this.label}}</li>{{/each}}</ul>
   {{/if}}
-  {{#if scope.show_notes}}<h3>Notas de metodología</h3><div class="rich-text">{{{scope.methodology_notes_html}}}</div>{{/if}}
-  {{#if scope.show_tools}}<h3>Herramientas utilizadas</h3><pre class="mono-block">{{scope.tools_used}}</pre>{{/if}}
-</div>
+  {{#if scope.show_notes}}<h3>{{labels.method_notes}}</h3><div class="rich-text">{{{scope.methodology_notes_html}}}</div>{{/if}}
+  {{#if scope.show_tools}}<h3>{{labels.tools}}</h3><pre class="mono-block">{{scope.tools_used}}</pre>{{/if}}
+</section>
 {{/if}}
 
-<div id="hallazgos" class="section">
-  <h2 class="section-title">Hallazgos técnicos</h2>
+<section id="hallazgos" class="section" aria-labelledby="hallazgos-title">
+  <h2 id="hallazgos-title" class="section-title">{{labels.findings}}</h2>
+  {{#unless findings}}<p class="muted">{{labels.no_findings}}</p>{{/unless}}
 
   {{#each findings}}
-  <div id="finding-{{this.index}}" class="finding sev-border-{{this.severity}}">
-    <div class="finding-head">
+  <article id="finding-{{this.index}}" class="finding sev-border-{{this.severity}}" aria-labelledby="finding-{{this.index}}-title">
+    <header class="finding-head">
       <div>
-        <span class="finding-code">{{this.code}}</span>
-        <h3>{{this.index1}}. {{this.title}}</h3>
+        <p class="finding-code">{{this.code}}</p>
+        <h3 id="finding-{{this.index}}-title">{{this.title}}</h3>
       </div>
       <span class="badge sev-bg-{{this.severity}}">{{this.severity_label}}</span>
-    </div>
+    </header>
 
-    <div class="finding-meta-grid">
-      <div class="finding-meta-item"><span>CVSS</span><strong>{{this.cvss}}</strong></div>
-      <div class="finding-meta-item"><span>CVE</span><strong>{{this.cve}}</strong></div>
-      <div class="finding-meta-item"><span>CWE</span><strong>{{this.cwe}}</strong></div>
-      <div class="finding-meta-item"><span>Estado</span><strong>{{this.status_label}}</strong></div>
-    </div>
+    <dl class="finding-meta-grid">
+      <div class="finding-meta-item"><dt>{{labels.cvss}}</dt><dd>{{#if this.cvss}}{{this.cvss}}{{else}}&mdash;{{/if}}</dd></div>
+      <div class="finding-meta-item"><dt>CVE</dt><dd>{{#if this.cve}}{{this.cve}}{{else}}&mdash;{{/if}}</dd></div>
+      <div class="finding-meta-item"><dt>CWE</dt><dd>{{#if this.cwe}}{{this.cwe}}{{else}}&mdash;{{/if}}</dd></div>
+      <div class="finding-meta-item"><dt>{{labels.status}}</dt><dd>{{this.status_label}}</dd></div>
+    </dl>
 
-    {{#if this.owasp_visible}}{{#if this.owasp}}<p><strong>OWASP:</strong> {{this.owasp}}</p>{{/if}}{{/if}}
-    {{#if this.risk_visible}}{{#if this.likelihood}}<p><strong>Probabilidad × Impacto:</strong> {{this.likelihood_label}} × {{this.impact_rating_label}}</p>{{/if}}{{/if}}
-    {{#if this.cvss_vector}}<p class="mono-inline">{{this.cvss_vector}}</p>{{/if}}
-    {{#if this.affected_assets}}<p><strong>Activos afectados:</strong></p><pre class="mono-block">{{this.affected_assets}}</pre>{{/if}}
+    <dl class="finding-details">
+      {{#if this.cvss_vector}}<div><dt>{{labels.cvss_vector}}</dt><dd class="mono">{{this.cvss_vector}}</dd></div>{{/if}}
+      {{#if this.owasp_visible}}{{#if this.owasp}}<div><dt>OWASP</dt><dd>{{this.owasp}}</dd></div>{{/if}}{{/if}}
+      {{#if this.risk_visible}}{{#if this.likelihood}}<div><dt>{{labels.likelihood}} &times; {{labels.impact}}</dt><dd>{{this.likelihood_label}} &times; {{this.impact_rating_label}}</dd></div>{{/if}}{{/if}}
+    </dl>
 
-    {{#if this.description}}<h4>Descripción</h4><div class="rich-text">{{{this.description_html}}}</div>{{/if}}
-    {{#if this.poc}}<h4>Pasos de reproducción (PoC)</h4><div class="code-block">{{{this.poc_html}}}</div>{{/if}}
-    {{#if this.exploit}}<h4>Código / exploit</h4><pre class="mono-block">{{this.exploit}}</pre>{{/if}}
+    {{#if this.affected_assets}}<h4>{{labels.assets}}</h4><pre class="mono-block">{{this.affected_assets}}</pre>{{/if}}
+    {{#if this.description}}<h4>{{labels.description}}</h4><div class="rich-text">{{{this.description_html}}}</div>{{/if}}
+    {{#if this.impact}}<h4>{{labels.impact_title}}</h4><div class="rich-text">{{{this.impact_html}}}</div>{{/if}}
+    {{#if this.poc}}<h4>{{labels.poc}}</h4><div class="code-block">{{{this.poc_html}}}</div>{{/if}}
+    {{#if this.exploit}}<h4>{{labels.exploit}}</h4><pre class="mono-block">{{this.exploit}}</pre>{{/if}}
 
-    {{#if this.images}}
-    <h4>Evidencias</h4>
+    {{#if this.evidence}}
+    <h4>{{labels.evidence}}</h4>
     <div class="evidence-grid">
-      {{#each this.images}}
+      {{#each this.evidence}}
       <figure class="evidence">
-        <img src="{{this}}" alt="evidencia {{@index1}}">
+        <img src="{{this.src}}" alt="{{this.alt}}">
+        <figcaption>{{this.label}}{{#if this.caption}} &mdash; {{this.caption}}{{/if}}</figcaption>
       </figure>
       {{/each}}
     </div>
     {{/if}}
 
-    {{#if this.impact}}<h4>Impacto</h4><div class="rich-text">{{{this.impact_html}}}</div>{{/if}}
-    {{#if this.remediation}}<div class="callout callout-ok"><h4>Solución recomendada</h4><div class="rich-text">{{{this.remediation_html}}}</div></div>{{/if}}
+    {{#if this.remediation}}<aside class="callout callout-ok"><h4>{{labels.remediation}}</h4><div class="rich-text">{{{this.remediation_html}}}</div></aside>{{/if}}
 
     {{#if this.compliance_visible}}{{#if this.compliance}}
-    <div class="tags">{{#each this.compliance}}<span class="tag">{{this}}</span>{{/each}}</div>
+    <h4>{{labels.compliance}}</h4>
+    <ul class="tags">{{#each this.compliance}}<li class="tag">{{this}}</li>{{/each}}</ul>
     {{/if}}{{/if}}
 
     {{#if this.references}}
-    <h4>Referencias</h4>
-    <ul>{{#each this.references}}<li><a href="{{this}}" target="_blank">{{this}}</a></li>{{/each}}</ul>
+    <h4>{{labels.references}}</h4>
+    <ul class="refs">{{#each this.references}}<li><a href="{{this}}" rel="noopener noreferrer">{{this}}</a></li>{{/each}}</ul>
     {{/if}}
 
     {{#if this.retest_visible}}{{#if this.retest_notes}}
-    <div class="callout"><h4>Notas de re-test</h4><div class="rich-text">{{{this.retest_notes_html}}}</div></div>
+    <aside class="callout"><h4>{{labels.retest}}</h4><div class="rich-text">{{{this.retest_notes_html}}}</div></aside>
     {{/if}}{{/if}}
-  </div>
+  </article>
   {{/each}}
-</div>
+</section>
 
 {{#if revision_history}}
-<div class="section">
-  <h2 class="section-title">Control de versiones</h2>
-  <table class="revisions">
-    <tr><th>Versión</th><th>Fecha</th><th>Autor</th><th>Cambios</th></tr>
-    {{#each revision_history}}
-    <tr><td>{{this.version}}</td><td>{{this.date}}</td><td>{{this.author}}</td><td>{{{this.changes_html}}}</td></tr>
-    {{/each}}
+<section id="versiones" class="section" aria-labelledby="versiones-title">
+  <h2 id="versiones-title" class="section-title">{{labels.revisions}}</h2>
+  <table class="data-table revisions">
+    <caption class="visually-hidden">{{labels.revisions}}</caption>
+    <thead>
+      <tr><th scope="col">{{labels.version}}</th><th scope="col">{{labels.date}}</th><th scope="col">{{labels.author}}</th><th scope="col">{{labels.changes}}</th></tr>
+    </thead>
+    <tbody>
+      {{#each revision_history}}
+      <tr><th scope="row">{{this.version}}</th><td>{{this.date}}</td><td>{{this.author}}</td><td>{{{this.changes_html}}}</td></tr>
+      {{/each}}
+    </tbody>
   </table>
-</div>
+</section>
 {{/if}}
 `;
 
-const DEFAULT_THEME_TEMPLATE_CSS = `/* Tema de ejemplo de Pwnly — edítalo libremente, es tuyo. */
-body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1f2937; background: #fff; line-height: 1.6; margin: 0; }
-h1, h2, h3, h4 { font-weight: 800; color: #111827; }
-a { color: #2563eb; }
+const DEFAULT_THEME_TEMPLATE_CSS = `/* Tema por defecto de Pwnly. Es de solo lectura: duplicalo desde "Temas" y editalo libremente.
+   Pensado para PDF accesible: contraste AA, jerarquia de encabezados, tablas con cabeceras y
+   saltos de pagina controlados. Los colores y tipos estan en variables para cambiarlos facil. */
+:root {
+  --text: #111827;
+  --muted: #4b5563;
+  --line: #d1d5db;
+  --soft: #f3f4f6;
+  --accent: #1d4ed8;
+  --crit: #b91c1c;
+  --high: #c2410c;
+  --med: #a16207;
+  --low: #15803d;
+  --info: #475569;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
 
-.cover { min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1rem; padding: 3rem 2rem; page-break-after: always; }
-.cover-logos { display: flex; gap: 1rem; margin-bottom: 1rem; }
-.cover-logo { max-height: 90px; }
-.cover-title { font-size: 2.6rem; margin: 0; max-width: 760px; }
-.cover-target { font-size: 1.2rem; color: #2563eb; font-weight: 600; margin: 0; }
-.cover-meta { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem 2rem; }
-.cover-meta-label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 0.2rem; }
+body { font-family: var(--font); font-size: 11pt; line-height: 1.6; color: var(--text); background: #fff; margin: 0; }
+h1, h2, h3, h4 { color: var(--text); line-height: 1.25; margin: 0; }
+h2 { font-size: 1.55rem; font-weight: 800; }
+h3 { font-size: 1.15rem; font-weight: 700; margin: 1.6rem 0 0.6rem; }
+h4 { font-size: 0.95rem; font-weight: 700; margin: 1.2rem 0 0.4rem; }
+p { margin: 0 0 0.75rem; }
+a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+ul, ol { margin: 0 0 0.75rem; padding-left: 1.4rem; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); font-size: 0.85em; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.badge { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #fff; }
-.badge-classif { background: #475569; }
-.sev-bg-crit { background: #dc2626; } .sev-bg-high { background: #f97316; } .sev-bg-med { background: #eab308; }
-.sev-bg-low  { background: #22c55e; } .sev-bg-info { background: #6b7280; }
-.sev-border-crit { border-left: 6px solid #dc2626; } .sev-border-high { border-left: 6px solid #f97316; }
-.sev-border-med  { border-left: 6px solid #eab308; } .sev-border-low  { border-left: 6px solid #22c55e; }
-.sev-border-info { border-left: 6px solid #6b7280; }
+/* ---------- Portada ---------- */
+.cover { min-height: 240mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 0.9rem; padding: 2rem 1rem; break-after: page; }
+.cover-logos { display: flex; gap: 1.5rem; align-items: center; justify-content: center; margin-bottom: 1rem; }
+.cover-logo { max-height: 80px; max-width: 220px; object-fit: contain; }
+.cover-kicker { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.cover-title { font-size: 2.4rem; font-weight: 800; max-width: 34rem; overflow-wrap: anywhere; }
+.cover-target { font-size: 1.2rem; font-weight: 600; color: var(--accent); margin: 0; overflow-wrap: anywhere; }
+.cover-class { margin: 0.5rem 0 0; }
+.cover-meta { display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem; justify-content: center; margin: 2rem 0 0; padding: 1.25rem 2rem; background: #f9fafb; border: 1px solid var(--line); border-radius: 10px; text-align: center; }
+.cover-meta dt { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 0.2rem; }
+.cover-meta dd { margin: 0; font-weight: 700; }
+.cover-meta .sub { display: block; font-weight: 400; color: var(--muted); font-size: 0.9em; }
 
-.toc { max-width: 820px; margin: 0 auto 3rem; padding: 0 1.5rem; page-break-after: always; }
-.toc-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.65rem 0; border-bottom: 1px dotted #d1d5db; text-decoration: none; color: #1f2937; }
+/* ---------- Indice ---------- */
+.toc { break-after: page; }
+.toc-title { border-bottom: 3px solid var(--text); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+.toc-list { list-style: none; padding: 0; margin: 0; }
+.toc-list > li { padding: 0.55rem 0; border-bottom: 1px solid var(--line); font-weight: 700; }
+.toc-sub { list-style: none; padding: 0.4rem 0 0 1rem; margin: 0; font-weight: 400; }
+.toc-sub > li { padding: 0.3rem 0; }
+.toc-item { color: var(--text); text-decoration: none; }
+.toc-finding { display: flex; align-items: baseline; gap: 0.75rem; }
+.toc-code { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); flex: none; }
+.toc-name { flex: 1; overflow-wrap: anywhere; }
+.toc-item:hover .toc-name { text-decoration: underline; }
 
-.section { max-width: 900px; margin: 0 auto 3rem; padding: 0 1.5rem; }
-.section-title { border-bottom: 2px solid #e5e7eb; padding-bottom: 0.6rem; }
+/* ---------- Secciones ---------- */
+.section { margin: 0 0 2.5rem; }
+.section-title { border-bottom: 3px solid var(--text); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+.rich-text { line-height: 1.7; overflow-wrap: anywhere; }
+.rich-text p:last-child { margin-bottom: 0; }
 
-.summary-bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 1rem 0; background: #f1f5f9; }
+/* ---------- Insignias de severidad (texto blanco >= 4.5:1; siempre llevan etiqueta) ---------- */
+.badge { display: inline-block; padding: 0.2rem 0.7rem; border-radius: 6px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; white-space: nowrap; line-height: 1.5; }
+.badge-classif { background: #334155; }
+.sev-bg-crit { background: var(--crit); } .sev-bg-high { background: var(--high); } .sev-bg-med { background: var(--med); }
+.sev-bg-low { background: var(--low); } .sev-bg-info { background: var(--info); }
+
+/* ---------- Resumen ---------- */
+.summary-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 0.5rem 0 0.75rem; background: var(--soft); }
 .summary-bar-seg { height: 100%; }
-.summary-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
-.legend-item { display: flex; align-items: center; gap: 0.4rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.875rem; }
-.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.summary-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 0.6rem; padding: 0; margin: 0 0 1.25rem; }
+.legend-item { display: flex; align-items: center; gap: 0.45rem; background: #f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 0.35rem 0.8rem; font-size: 0.9rem; }
+.legend-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
 
-.rich-text { line-height: 1.75; }
-.callout { border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid #e2e8f0; background: #f8fafc; margin: 1rem 0; }
-.callout-ok { background: #f0fdf4; border-color: #bbf7d0; }
-.callout-warning { background: #fff7ed; border-color: #fed7aa; }
+/* ---------- Tablas ---------- */
+.data-table { display: table; width: 100%; border-collapse: collapse; margin: 0.5rem 0 1.25rem; font-size: 0.9rem; }
+.data-table th, .data-table td { border: 1px solid var(--line); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+.data-table thead th { background: var(--soft); font-weight: 700; }
+.data-table tbody th { font-weight: 700; background: #f9fafb; }
+.overview td a { color: var(--text); }
+.overview tbody th { white-space: nowrap; }
+.risk-matrix th, .risk-matrix td { text-align: center; vertical-align: middle; }
+.risk-matrix tbody th { text-align: left; }
+.risk-cell strong { display: block; font-size: 1.15rem; }
+.risk-cell span { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.risk-critical { background: #fecaca; color: #7f1d1d; } .risk-high { background: #fed7aa; color: #7c2d12; }
+.risk-medium { background: #fef08a; color: #713f12; } .risk-low { background: #bbf7d0; color: #14532d; }
 
-.tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.tag { background: rgba(37,99,235,0.1); color: #1d4ed8; border-radius: 999px; padding: 0.2rem 0.7rem; font-size: 0.78rem; font-weight: 600; }
+/* ---------- Avisos ---------- */
+.callout { border-radius: 8px; padding: 0.9rem 1.2rem; border: 1px solid var(--line); background: #f9fafb; margin: 1rem 0; }
+.callout h4 { margin-top: 0; }
+.callout-ok { background: #f0fdf4; border-color: #86efac; }
+.callout-warning { background: #fff7ed; border-color: #fdba74; }
 
-.mono-block { font-family: ui-monospace, monospace; font-size: 0.85rem; white-space: pre-wrap; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 1rem; }
-.mono-inline { font-family: ui-monospace, monospace; font-size: 0.85rem; color: #475569; }
-.code-block { font-family: ui-monospace, monospace; font-size: 0.85rem; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 1rem; overflow-x: auto; }
+/* ---------- Etiquetas y bloques de codigo ---------- */
+.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0; margin: 0 0 0.75rem; }
+.tag { background: #dbeafe; color: #1e3a8a; border-radius: 999px; padding: 0.15rem 0.7rem; font-size: 0.8rem; font-weight: 600; }
+.mono-block, .code-block { font-family: var(--mono); font-size: 0.82rem; line-height: 1.55; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 0.9rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 1rem; }
+.code-block p { margin: 0 0 0.4rem; } .code-block p:last-child { margin: 0; }
+.code-block code, .code-block pre, .rich-text code { font-family: var(--mono); }
+.rich-text code { background: var(--soft); border-radius: 4px; padding: 0.05em 0.35em; font-size: 0.9em; }
+.refs { overflow-wrap: anywhere; }
 
-.risk-matrix { border-collapse: collapse; margin: 1rem 0; }
-.risk-matrix th, .risk-matrix td { border: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: center; font-size: 0.85rem; }
-
-.finding { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.75rem; margin-bottom: 2rem; page-break-inside: avoid; }
-.finding-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1.25rem; }
-.finding-head h3 { margin: 0.2rem 0 0; }
-.finding-code { font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 700; color: #6b7280; border: 1px solid #e5e7eb; border-radius: 5px; padding: 0.1rem 0.45rem; }
-.finding-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
-.finding-meta-item { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem 1rem; }
-.finding-meta-item span { display: block; font-size: 0.7rem; text-transform: uppercase; color: #6b7280; margin-bottom: 0.2rem; }
+/* ---------- Hallazgos ---------- */
+.finding { border: 1px solid var(--line); border-left: 6px solid var(--info); border-radius: 10px; padding: 1.4rem 1.6rem; margin: 0 0 2rem; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.finding-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: 0.9rem; margin-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.finding-head h3 { margin: 0.15rem 0 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.finding-code { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: var(--muted); margin: 0; }
+.finding-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 0 0 1rem; }
+.finding-meta-item { background: #f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.85rem; }
+.finding-meta-item dt { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.finding-meta-item dd { margin: 0.1rem 0 0; font-weight: 700; overflow-wrap: anywhere; }
+.finding-details { margin: 0 0 0.5rem; }
+.finding-details > div { display: flex; flex-wrap: wrap; gap: 0.2rem 0.75rem; padding: 0.15rem 0; }
+.finding-details dt { font-weight: 700; min-width: 9rem; }
+.finding-details dd { margin: 0; overflow-wrap: anywhere; }
 
 .evidence-grid { display: grid; gap: 1rem; }
-.evidence img { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; }
+.evidence { margin: 0; }
+.evidence img { display: block; width: 100%; height: auto; max-height: 200mm; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.evidence figcaption { font-size: 0.82rem; color: var(--muted); margin-top: 0.35rem; }
 
-.revisions { width: 100%; border-collapse: collapse; }
-.revisions th, .revisions td { border: 1px solid #e5e7eb; padding: 0.6rem 0.8rem; text-align: left; font-size: 0.875rem; }
+.finding.sev-border-crit { border-left-color: var(--crit); } .finding.sev-border-high { border-left-color: var(--high); }
+.finding.sev-border-med { border-left-color: var(--med); } .finding.sev-border-low { border-left-color: var(--low); }
+.finding.sev-border-info { border-left-color: var(--info); }
+
+/* ---------- Pantallas estrechas (vista previa en movil) ---------- */
+@media (max-width: 600px) {
+  .cover-title { font-size: 1.8rem; }
+  .cover-meta { padding: 1rem; gap: 1rem 1.5rem; }
+  .data-table { font-size: 0.8rem; }
+  .data-table th, .data-table td { padding: 0.35rem 0.4rem; }
+  .finding { padding: 1rem; }
+  .finding-head { flex-direction: column; gap: 0.5rem; }
+  .finding-details dt { min-width: 0; width: 100%; }
+  .overview th:nth-child(5), .overview td:nth-child(5) { display: none; }
+  .overview .badge { padding: 0.15rem 0.45rem; font-size: 0.65rem; }
+}
+
+/* ---------- Impresion / PDF ---------- */
+@page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: counter(page) " / " counter(pages); font-family: system-ui, Arial, sans-serif; font-size: 9pt; color: #4b5563; } }
+@page :first { @bottom-center { content: none; } }
 
 @media print {
-  .finding { page-break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-size: 10pt; line-height: 1.5; background: #fff; }
+  h2, h3, h4, .finding-head, .toc-title { break-after: avoid; }
+  p, .rich-text li { orphans: 3; widows: 3; }
+  /* La hoja base de la app impide partir listas; el indice puede ocupar varias paginas. */
+  .toc-list, .toc-list > li, .toc-sub, .toc-sub > li { break-inside: auto; page-break-inside: auto; }
+  #hallazgos { break-before: page; }
+  .finding { border-top: 0; border-right: 0; border-bottom: 0; border-left-width: 5px; border-radius: 0; padding: 0 0 0 1rem; margin: 0; }
+  .finding + .finding { break-before: page; }
+  .finding-head, .finding-meta-grid, .callout, .evidence, .data-table tr, .legend-item, .cover-meta, .summary-bar { break-inside: avoid; }
+  .evidence img { max-height: 120mm; }
+  .mono-block, .code-block { background: #f3f4f6; color: #111827; border: 1px solid var(--line); border-left: 4px solid #6b7280; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .cover { min-height: 235mm; }
+  a { color: var(--accent); }
 }
 `;
 
@@ -2493,12 +2634,12 @@ function renderThemeStudio() {
                         <textarea class="ts-code ts-code--full" spellcheck="false" aria-label="${isEs ? 'Código del tema' : 'Theme code'}"
                             oninput="themeEditorSetHtml(this.value)">${escapeHTML(ed.html)}</textarea>
                         <p class="ts-hint">${isEs
-                            ? 'Plantilla del documento. Sintaxis: <code>{{variable}}</code>, <code>{{{html_sin_escapar}}}</code>, <code>{{#each lista}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'
-                            : 'Document template. Syntax: <code>{{variable}}</code>, <code>{{{unescaped_html}}}</code>, <code>{{#each list}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>.'}</p>
+                            ? 'Plantilla del documento. Sintaxis: <code>{{variable}}</code>, <code>{{{html_sin_escapar}}}</code>, <code>{{#each lista}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>. Textos localizados: <code>{{labels.toc}}</code>… (cambian con el idioma). Evidencias: <code>{{#each this.evidence}}</code> con <code>src</code>, <code>alt</code>, <code>label</code> y <code>caption</code>. Referencia completa en docs/THEMES.md.'
+                            : 'Document template. Syntax: <code>{{variable}}</code>, <code>{{{unescaped_html}}}</code>, <code>{{#each list}}...{{/each}}</code>, <code>{{#if cond}}...{{else}}...{{/if}}</code>. Localized texts: <code>{{labels.toc}}</code>… (they follow the language). Evidence: <code>{{#each this.evidence}}</code> with <code>src</code>, <code>alt</code>, <code>label</code> and <code>caption</code>. Full reference in docs/THEMES.md.'}</p>
                     ` : `
                         <textarea class="ts-code ts-code--full" spellcheck="false" aria-label="${isEs ? 'Código del tema' : 'Theme code'}"
                             oninput="themeEditorSetCss(this.value)">${escapeHTML(ed.css)}</textarea>
-                        <p class="ts-hint">${isEs ? 'CSS libre: sin espacio de nombres ni variables obligatorias, es tu CSS.' : 'Free CSS: no required namespace or variables, it is just your CSS.'}</p>
+                        <p class="ts-hint">${isEs ? 'CSS libre, solo afecta al informe. Para el PDF usa @page (márgenes y numeración) y print-color-adjust: exact para conservar los colores de fondo. Duplica el tema por defecto como punto de partida.' : 'Free CSS, it only affects the report. For the PDF use @page (margins and page numbers) and print-color-adjust: exact to keep background colors. Duplicate the default theme as a starting point.'}</p>
                     `}
                 </div>
                 <div class="ts-preview ts-preview--frame">
@@ -2880,12 +3021,55 @@ function scopeSectionHasContent(d) {
 // overrides opcionales (auditData/findings/showBars) para poder construir un
 // contexto de EJEMPLO sin depender del estado global (ver buildSampleReportContext).
 // --------------------------------------------------------------------------- //
+
+// Textos del informe por idioma, expuestos a los temas como {{labels.clave}} para que
+// cualquier tema (incluido el por defecto) salga en el idioma de la interfaz.
+const REPORT_LABELS = {
+    es: {
+        logo: 'Logotipo', classification: 'Clasificación', client: 'Cliente', auditor: 'Auditor', date: 'Fecha', version: 'Versión',
+        toc: 'Índice', summary: 'Resumen ejecutivo', scope: 'Alcance y metodología', findings: 'Hallazgos técnicos', revisions: 'Control de versiones',
+        distribution: 'Distribución por severidad', overview: 'Resumen de hallazgos', id: 'ID', finding: 'Hallazgo', severity: 'Severidad', cvss: 'CVSS', status: 'Estado',
+        tests: 'Pruebas realizadas', solutions: 'Soluciones recomendadas', risk_matrix: 'Matriz de riesgo (probabilidad × impacto)',
+        likelihood: 'Probabilidad', impact: 'Impacto', risk_high: 'Alta', risk_med: 'Media', risk_low: 'Baja',
+        level_critical: 'Crítico', level_high: 'Alto', level_medium: 'Medio', level_low: 'Bajo',
+        incidents: 'Incidencias durante las pruebas', no_incidents: 'No se registraron incidencias durante la ejecución de las pruebas.',
+        window: 'Ventana del engagement', in_scope: 'Dentro del alcance', out_scope: 'Fuera del alcance', standards: 'Metodologías y estándares',
+        method_notes: 'Notas de metodología', tools: 'Herramientas utilizadas', no_findings: 'No se han registrado hallazgos.',
+        cvss_vector: 'Vector CVSS', assets: 'Activos afectados', description: 'Descripción', impact_title: 'Impacto', poc: 'Pasos de reproducción (PoC)',
+        exploit: 'Código / exploit', evidence: 'Evidencias', remediation: 'Solución recomendada', compliance: 'Cumplimiento normativo', references: 'Referencias',
+        retest: 'Notas de re-test', author: 'Autor', changes: 'Cambios', evidence_alt: 'Evidencia', of: 'de'
+    },
+    en: {
+        logo: 'Logo', classification: 'Classification', client: 'Client', auditor: 'Auditor', date: 'Date', version: 'Version',
+        toc: 'Table of contents', summary: 'Executive summary', scope: 'Scope and methodology', findings: 'Technical findings', revisions: 'Version history',
+        distribution: 'Severity distribution', overview: 'Findings overview', id: 'ID', finding: 'Finding', severity: 'Severity', cvss: 'CVSS', status: 'Status',
+        tests: 'Tests performed', solutions: 'Recommended solutions', risk_matrix: 'Risk matrix (likelihood × impact)',
+        likelihood: 'Likelihood', impact: 'Impact', risk_high: 'High', risk_med: 'Medium', risk_low: 'Low',
+        level_critical: 'Critical', level_high: 'High', level_medium: 'Medium', level_low: 'Low',
+        incidents: 'Incidents during testing', no_incidents: 'No incidents were recorded while the tests were carried out.',
+        window: 'Engagement window', in_scope: 'In scope', out_scope: 'Out of scope', standards: 'Methodologies and standards',
+        method_notes: 'Methodology notes', tools: 'Tools used', no_findings: 'No findings have been recorded.',
+        cvss_vector: 'CVSS vector', assets: 'Affected assets', description: 'Description', impact_title: 'Impact', poc: 'Steps to reproduce (PoC)',
+        exploit: 'Code / exploit', evidence: 'Evidence', remediation: 'Recommended solution', compliance: 'Compliance', references: 'References',
+        retest: 'Re-test notes', author: 'Author', changes: 'Changes', evidence_alt: 'Evidence', of: 'of'
+    }
+};
+
+function formatReportDate(value, lang) {
+    if (!value) return '';
+    const dt = new Date(String(value) + 'T00:00:00');
+    if (isNaN(dt.getTime())) return String(value);
+    try { return dt.toLocaleDateString(lang === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' }); }
+    catch (e) { return String(value); }
+}
+
 function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
     const d = auditDataParam || state.auditData;
     const findingsSrc = findingsParam || state.findings;
     const showBars = (typeof showBarsParam === 'boolean') ? showBarsParam : !!state.pdfShowSeverityBars;
     const t = UI[state.lang];
     const isEs = state.lang === 'es';
+    const L = REPORT_LABELS[state.lang] || REPORT_LABELS.es;
     const riskLbl = (k) => (t.riskLevels || {})[k] || k || '';
 
     const classLabels = {
@@ -2934,7 +3118,8 @@ function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
                 impact: im,
                 impact_label: riskLbl(im),
                 count: cellCounts[lk + '_' + im],
-                level: score >= 9 ? 'critical' : score >= 6 ? 'high' : score >= 3 ? 'medium' : 'low'
+                level: score >= 9 ? 'critical' : score >= 6 ? 'high' : score >= 3 ? 'medium' : 'low',
+                level_label: L['level_' + (score >= 9 ? 'critical' : score >= 6 ? 'high' : score >= 3 ? 'medium' : 'low')]
             };
         })
     }));
@@ -2948,10 +3133,21 @@ function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
         const likelihood = f.likelihood || '';
         const impactRating = f.impactRating || f.impact_rating || '';
         const retestNotes = f.retestNotes || f.retest_notes || '';
+        const code = 'F-' + String(idx + 1).padStart(2, '0');
+        const imgList = Array.isArray(f.images) ? f.images : [];
+        const capList = Array.isArray(f.imageCaptions || f.image_captions) ? (f.imageCaptions || f.image_captions) : [];
+        const evidenceItems = imgList.map((src, i) => ({ src, caption: (capList[i] || '').trim() })).filter(e => e.src);
+        const evidence = evidenceItems.map((e, i) => ({
+            src: e.src,
+            caption: e.caption,
+            n: i + 1,
+            label: code + '.' + (i + 1),
+            alt: L.evidence_alt + ' ' + (i + 1) + ' ' + L.of + ' ' + evidenceItems.length + ' — ' + code + ': ' + (f.title || '') + (e.caption ? '. ' + e.caption : '')
+        }));
         return {
             index: idx,
             index1: idx + 1,
-            code: 'F-' + String(idx + 1).padStart(2, '0'),
+            code,
             title: f.title || '',
             severity: sev,
             severity_label: t.severityLevels[sev],
@@ -2972,6 +3168,7 @@ function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
             remediation_html: markdownToHtml(f.remediation || ''),
             images: Array.isArray(f.images) ? f.images : [],
             image_captions: Array.isArray(f.imageCaptions || f.image_captions) ? (f.imageCaptions || f.image_captions) : [],
+            evidence,
             status: f.status || 'open',
             status_label: (t.findingStatuses || {})[f.status || 'open'] || f.status || '',
             affected_assets: f.affectedAssets || f.affected_assets || '',
@@ -3004,6 +3201,8 @@ function buildReportContext(auditDataParam, findingsParam, showBarsParam) {
         classification_label: classLabels[d.classification] || classLabels['2'],
         version: d.version || '',
         date: d.date || '',
+        date_formatted: formatReportDate(d.date, state.lang),
+        labels: L,
         audit_type: d.auditType || '',
         audit_type_label: (t.auditTypes || {})[d.auditType] || d.auditType || '',
 
@@ -3145,7 +3344,7 @@ function renderPreview() {
         bodyHtml = `<pre style="color:#dc2626;white-space:pre-wrap;padding:1.5rem;font-family:ui-monospace,monospace;">${escapeHTML((isEs ? 'Error en la plantilla del tema: ' : 'Theme template error: ') + e.message)}</pre>`;
     }
 
-    return `<div class="preview-container" data-rt-theme="${escapeHTML(theme.slug)}" style="max-width:${_cw}px;">${bodyHtml}</div>`;
+    return `<div class="preview-container" data-rt-theme="${escapeHTML(theme.slug)}" style="max-width:${_cw}px;--pdf-w:${_cw}px;">${bodyHtml}</div>`;
 }
 
 
@@ -3898,6 +4097,7 @@ function _restoreFocus(d) {
 }
 
 function _viewName() {
+    if (new URLSearchParams(window.location.search).get('print_mode') === 'true') return '';   // el título lo fija el informe
     const es = state.lang === 'es';
     if (!state.isAuthenticated) return es ? 'Acceso' : 'Sign in';
     if (state.isAccountView) return es ? 'Cuenta y usuarios' : 'Account and users';
@@ -3966,6 +4166,7 @@ function _a11yEnhanceApp() {
     // Título e idioma del documento + anuncio de cambio de vista (SPA).
     document.documentElement.lang = state.lang === 'en' ? 'en' : 'es';
     const name = _viewName();
+    if (!name) { return; }
     if (name !== _lastViewName) {
         document.title = name + ' — Pwnly';
         let live = document.getElementById('a11y-live');
@@ -5757,6 +5958,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error("Error cargando reporte para imprimir", e);
         }
         renderApp();
+        // El título del documento es el nombre por defecto del PDF/HTML y el título del PDF accesible.
+        document.title = _reportFileName();
         // Pintamos el fondo de la página con el color del tema para que el lienzo
         // del PDF (márgenes incluidos) coincida con cualquier tema, incluso los
         // personalizados.
